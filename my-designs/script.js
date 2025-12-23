@@ -54,10 +54,10 @@ function updateConfiguratorLink() {
     
     if (configuratorLink) {
         if (from === 'socks') {
-            configuratorLink.href = '../gf-sports/socks-configurator/index.html';
+            configuratorLink.href = '../socks-configurator/index.html';
         } else {
             // Default to jersey if from=jersey or no parameter
-            configuratorLink.href = '../gf-sports/jersey-configurator/index.html';
+            configuratorLink.href = '/gf-sports/jersey-configurator/index.html';
         }
     }
     
