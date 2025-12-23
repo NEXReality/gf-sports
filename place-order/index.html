@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Place Order</title>
+    <link rel="icon" type="image/x-icon" href="../images/gf_sports.ico">
+    <meta name="title" content="Place Order">
+    <meta name="keywords" content="3D socks configurator, 3D jersey configurator, custom socks designer, custom jersey designer, 3D custom socks, 3D custom jersey, online socks configurator, online jersey configurator, socks design tool, jersey design tool, personalized socks maker, personalized jersey maker, sportswear configurator, teamwear configurator, 3D apparel configurator, interactive socks designer, interactive jersey designer, custom sportswear generator, socks customization software, jersey customization software">
+    <meta name="description" content="Design custom socks and jerseys in real time using an interactive 3D configurator. Create, personalize, visualize, and order sportswear online with ease.">
+    <link rel="canonical" href="https://globe-fashion.com/">
+    <meta property="og:image" content="../images/og_image.jpg">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://globe-fashion.com/">
+    <meta property="og:title" content="GF Sports">
+    <meta property="og:description" content="Design custom socks and jerseys in real time using an interactive 3D configurator. Create, personalize, visualize, and order sportswear online with ease.">
+    <meta name="twitter:title" content="GF Sports">
+    <meta name="twitter:url" content="https://globe-fashion.com/">
+    <meta name="twitter:description" content="Design custom socks and jerseys in real time using an interactive 3D configurator. Create, personalize, visualize, and order sportswear online with ease.">
+    <meta name="twitter:image" content="../images/og_image.jpg">
+    <meta name="twitter:card" content="summary">
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-J218ER51C4"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag('js', new Date());
+      gtag('config', 'G-J218ER51C4');
+    </script>
+    <link rel="stylesheet" href="../styles.css">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .brand { visibility: hidden; }
+    </style>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script type="module" src="https://unpkg.com/@lottiefiles/dotlottie-wc@latest/dist/dotlottie-wc.js"></script>
+</head>
+
+<body>
+    <div id="root">
+        <header class="header">
+            <div class="header-content">
+                <div class="brand">
+                    <img class="brand-logo" src="../images/jersey_logo.svg" alt="Jersey logo">
+                    <span class="brand-name">
+                        <span data-en>3D Jersey Configurator</span>
+                        <span data-fr>Configurateur de Maillot 3D</span>
+                    </span>
+                </div>
+                <div class="header-controls">
+                    <a href="../index.html" class="home-button" aria-label="Home">
+                        <svg width="25" height="25" viewBox="-4.5 0 32 32" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                                d="M19.469 12.594l3.625 3.313c0.438 0.406 0.313 0.719-0.281 0.719h-2.719v8.656c0 0.594-0.5 1.125-1.094 1.125h-4.719v-6.063c0-0.594-0.531-1.125-1.125-1.125h-2.969c-0.594 0-1.125 0.531-1.125 1.125v6.063h-4.719c-0.594 0-1.125-0.531-1.125-1.125v-8.656h-2.688c-0.594 0-0.719-0.313-0.281-0.719l10.594-9.625c0.438-0.406 1.188-0.406 1.656 0l2.406 2.156v-1.719c0-0.594 0.531-1.125 1.125-1.125h2.344c0.594 0 1.094 0.531 1.094 1.125v5.875z">
+                            </path>
+                        </svg>
+                    </a>
+                    <a href="../jersey-configurator/index.html" class="nav-link">
+                        <span data-en>Configurator</span>
+                        <span data-fr>Configurateur</span>
+                    </a>
+                    <a href="../my-designs/index.html" class="nav-link">
+                        <span data-en>My Designs</span>
+                        <span data-fr>Mes Designs</span>
+                    </a>
+                    <a href="index.html" class="nav-link active">
+                        <span data-en>Place Order</span>
+                        <span data-fr>Passer Commande</span>
+                    </a>
+                    <div class="language-toggle">
+                        <span class="language-label">EN</span>
+                        <button class="toggle-switch" aria-label="Switch language">
+                            <span class="toggle-slider"></span>
+                        </button>
+                        <span class="language-label">FR</span>
+                    </div>
+                    <button class="user-button">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                                d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
+                                fill="currentColor" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="place-order-container">
+            <div class="page-header">
+                <h1 class="page-title">
+                    <span data-en>Place Order</span>
+                    <span data-fr>Passer la Commande</span>
+                </h1>
+                <button class="add-design-button" id="add-design-button">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                            stroke-linejoin="round" />
+                    </svg>
+                    <span data-en>Add Design</span>
+                    <span data-fr>Ajouter un Design</span>
+                </button>
+            </div>
+
+            <div class="order-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th><span data-en>Design Name</span><span data-fr>Nom du Design</span></th>
+                            <th><span data-en>Preview</span><span data-fr>Aperçu</span></th>
+                            <th><span data-en>Product Type</span><span data-fr>Type de Produit</span></th>
+                            <th><span data-en>Size Range</span><span data-fr>Gamme de Tailles</span></th>
+                            <th class="silicon-grip-header"><span data-en>Silicon Grip</span><span data-fr>Grip en Silicone</span></th>
+                            <th><span data-en>Quantity</span><span data-fr>Quantité</span></th>
+                            <th><span data-en>Actions</span><span data-fr>Actions</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="order-table-body">
+                        <!-- Design rows will be dynamically added here -->
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="4" class="total-label">
+                                <span data-en>Total Quantity</span>
+                                <span data-fr>Quantité Totale</span>
+                            </td>
+                            <td class="silicon-grip-footer"></td>
+                            <td id="grand-total" class="total-value">0</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <div class="contact-details">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <span data-en>Contact Details</span>
+                        <span data-fr>Coordonnées</span>
+                    </h2>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="fullName">
+                            <span data-en>Full Name</span>
+                            <span data-fr>NOM Prénom</span>
+                        </label>
+                        <input type="text" id="fullName" pattern="[A-Za-z ]*" required>
+                        <span class="error-message"></span>
+                    </div>
+                    <div class="form-group">
+                        <label for="clubName">
+                            <span data-en>Club Name</span>
+                            <span data-fr>Nom du Club</span>
+                        </label>
+                        <input type="text" id="clubName" pattern="[A-Za-z0-9 ]*" required>
+                        <span class="error-message"></span>
+                    </div>
+                    <div class="form-group">
+                        <label for="email_order">
+                            <span data-en>Email</span>
+                            <span data-fr>E-mail</span>
+                        </label>
+                        <input type="email" id="email_order" required>
+                        <span class="error-message"></span>
+                    </div>
+                    <div class="form-group">
+                        <label for="phone">
+                            <span data-en>Phone</span>
+                            <span data-fr>Téléphone</span>
+                        </label>
+                        <input type="tel" id="phone" required>
+                        <span class="error-message"></span>
+                    </div>
+                    <div class="form-group full-width">
+                        <label for="address">
+                            <span data-en>Street Address</span>
+                            <span data-fr>Adresse</span>
+                        </label>
+                        <input type="text" id="address" required>
+                        <span class="error-message"></span>
+                    </div>
+                    <div class="form-group">
+                        <label for="zipCode">
+                            <span data-en>ZIP Code</span>
+                            <span data-fr>Code Postal</span>
+                        </label>
+                        <input type="text" id="zipCode" required>
+                        <span class="error-message"></span>
+                    </div>
+                    <div class="form-group">
+                        <label for="city">
+                            <span data-en>City</span>
+                            <span data-fr>Ville</span>
+                        </label>
+                        <input type="text" id="city" required>
+                        <span class="error-message"></span>
+                    </div>
+                    <div class="form-group">
+                        <label for="state">
+                            <span data-en>State</span>
+                            <span data-fr>Dept</span>
+                        </label>
+                        <input type="text" id="state" required>
+                        <span class="error-message"></span>
+                    </div>
+                    <div class="form-group">
+                        <label for="country">
+                            <span data-en>Country</span>
+                            <span data-fr>Pays</span>
+                        </label>
+                        <input type="text" id="country" required>
+                        <span class="error-message"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="place-order-button">
+                    <span data-en>Place Order</span>
+                    <span data-fr>Passer la Commande</span>
+                </button>
+            </div>
+        </main>
+
+        <!-- Login -->
+        <div class="user-dropdown" style="display: none;">
+            <button class="dropdown-item" id="login-btn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M13.8 12H3" stroke="currentColor"
+                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <span data-en>Log in</span>
+                <span data-fr>Se connecter</span>
+            </button>
+            <button class="dropdown-item" id="create-account-btn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M13.3,17.5v-1.7
+                c0-1.8-1.5-3.3-3.3-3.3H5c-1.8,0-3.3,1.5-3.3,3.3v1.7 M8,9.2c1.8,0,3.3-1.5,3.3-3.3S9.8,2.5,8,2.5S4.7,4,4.7,5.8S6.2,9.2,8,9.2z
+                 M16.7,6.7v5 M14.2,9.2h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round" />
+                </svg>
+                <span data-en>Create Account</span>
+                <span data-fr>Créer un Compte</span>
+            </button>
+        </div>
+
+        <div class="modal-overlay" id="login-modal" style="display: none;">
+            <div class="modal">
+                <div class="modal-content">
+                    <h2 class="modal-title">
+                        <span data-en>Log in</span>
+                        <span data-fr>Se connecter</span>
+                    </h2>
+                    <form class="login-form">
+                        <div class="form-group">
+                            <label for="email">
+                                <span data-en>Email</span>
+                                <span data-fr>E-mail</span>
+                            </label>
+                            <input type="email" id="email" placeholder="Enter your email"
+                                data-en-placeholder="Enter your email" data-fr-placeholder="Entrez votre e-mail"
+                                required>
+                        </div>
+                        <div class="form-group">
+                            <label for="password">
+                                <span data-en>Password</span>
+                                <span data-fr>Mot de passe</span>
+                            </label>
+                            <input type="password" id="password" placeholder="Enter your password"
+                                data-en-placeholder="Enter your password"
+                                data-fr-placeholder="Entrez votre mot de passe" required>
+                        </div>
+                        <button type="submit" class="login-button">
+                            <span data-en>Log in</span>
+                            <span data-fr>Se connecter</span>
+                        </button>
+                        <div class="form-footer">
+                            <a href="#" class="text-link">
+                                <span data-en>Don't have an account?</span>
+                                <span data-fr>Vous n'avez pas de compte ?</span>
+                            </a>
+                            <a href="#" class="text-link">
+                                <span data-en>Forgot Password?</span>
+                                <span data-fr>Mot de passe oublié ?</span>
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <!-- create account -->
+        <div class="modal-overlay" id="create-account-modal" style="display: none;">
+            <div class="modal">
+                <div class="modal-content">
+                    <h2 class="modal-title">
+                        <span data-en>Create Account</span>
+                        <span data-fr>Créer un Compte</span>
+                    </h2>
+                    <form class="create-account-form">
+                        <div class="name-row">
+                            <div class="form-group">
+                                <label for="firstName">
+                                    <span data-en>First Name</span>
+                                    <span data-fr>Prénom</span>
+                                </label>
+                                <input type="text" id="firstName" placeholder="First name"
+                                    data-en-placeholder="First name" data-fr-placeholder="Prénom" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="lastName">
+                                    <span data-en>Last Name</span>
+                                    <span data-fr>Nom</span>
+                                </label>
+                                <input type="text" id="lastName" placeholder="Last name" data-en-placeholder="Last name"
+                                    data-fr-placeholder="Nom" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="phoneNumber">
+                                <span data-en>Phone Number</span>
+                                <span data-fr>Numéro de téléphone</span>
+                            </label>
+                            <input type="tel" id="phoneNumber" placeholder="Enter your phone number"
+                                data-en-placeholder="Enter your phone number"
+                                data-fr-placeholder="Entrez votre numéro de téléphone" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="clubNameSignup">
+                                <span data-en>Club Name</span>
+                                <span data-fr>Nom du club</span>
+                            </label>
+                            <input type="text" id="clubNameSignup" placeholder="Enter your club name"
+                                data-en-placeholder="Enter your club name"
+                                data-fr-placeholder="Entrez le nom de votre club" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="signupEmail">
+                                <span data-en>Email</span>
+                                <span data-fr>E-mail</span>
+                            </label>
+                            <input type="email" id="signupEmail" placeholder="Enter your email"
+                                data-en-placeholder="Enter your email" data-fr-placeholder="Entrez votre e-mail"
+                                required>
+                        </div>
+                        <div class="form-group">
+                            <label for="signupPassword">
+                                <span data-en>Password</span>
+                                <span data-fr>Mot de passe</span>
+                            </label>
+                            <input type="password" id="signupPassword" placeholder="Create password"
+                                data-en-placeholder="Create password" data-fr-placeholder="Créez un mot de passe"
+                                required>
+                        </div>
+                        <button type="submit" class="login-button">
+                            <span data-en>Sign up</span>
+                            <span data-fr>S'inscrire</span>
+                        </button>
+                        <div class="form-footer">
+                            <span>
+                                <span data-en>Already have an account?</span>
+                                <span data-fr>Vous avez déjà un compte ?</span>
+                                <a href="#" class="text-link" id="switch-to-login">
+                                    <span data-en>Log in</span>
+                                    <span data-fr>Se connecter</span>
+                                </a>
+                            </span>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <!-- forggot password -->
+        <div class="modal-overlay" id="forgot-password-modal" style="display: none;">
+            <div class="modal">
+                <div class="modal-content">
+                    <h2 class="modal-title">
+                        <span data-en>Forgot your password?</span>
+                        <span data-fr>Mot de passe oublié ?</span>
+                    </h2>
+                    <form class="forgot-password-form">
+                        <div id="forgot-password-stage-1">
+                            <p class="forgot-password-text">
+                                <span data-en>Type in the email associated with your account and we'll send you a link
+                                    to reset your password.</span>
+                                <span data-fr>Saisissez l'e-mail associé à votre compte et nous vous enverrons un lien
+                                    pour réinitialiser votre mot de passe.</span>
+                            </p>
+                            <div class="form-group">
+                                <label for="forgotPasswordEmail">
+                                    <span data-en>Email</span>
+                                    <span data-fr>E-mail</span>
+                                </label>
+                                <input type="email" id="forgotPasswordEmail" placeholder="Enter your email"
+                                    data-en-placeholder="Enter your email"
+                                    data-fr-placeholder="Entrez votre adresse e-mail" required>
+                            </div>
+                            <button type="submit" class="submit-button">
+                                <span data-en>Send Email</span>
+                                <span data-fr>Envoyer l'e-mail</span>
+                            </button>
+                        </div>
+                        <div id="forgot-password-stage-2" style="display: none;">
+                            <p class="forgot-password-text">
+                                <span data-en>An email has been sent to your address. Please check your inbox including
+                                    spam and follow the instructions to reset your password.</span>
+                                <span data-fr>Un e-mail a été envoyé à votre adresse. Veuillez vérifier votre boîte de
+                                    réception, y compris les spams, et suivre les instructions pour réinitialiser votre
+                                    mot de passe.</span>
+                            </p>
+                            <button type="button" class="submit-button" id="backToLoginBtn">
+                                <span data-en>Back to Login</span>
+                                <span data-fr>Retour à la connexion</span>
+                            </button>
+                        </div>
+                        <div class="form-footer">
+                            <a href="#" class="text-link" id="backToLoginLink">
+                                <span data-en>Back to Login</span>
+                                <span data-fr>Retour à la connexion</span>
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <!-- Select Design Modal !! KEEP IT BELOW "user-dropdown" OR IT WILL BE HIDDEN -->
+        <div id="design-select-modal" class="design-select-modal">
+            <div class="design-modal-content">
+                <div class="modal-header">
+                    <h2>
+                        <span data-en>Select Design</span>
+                        <span data-fr>Sélectionner un Design</span>
+                    </h2>
+                    <button class="close-modal">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="design-list">
+                        <!-- Designs will be dynamically added here -->
+                    </div>
+
+                </div>
+            </div>
+            <dotlottie-wc id="loading-animation"
+                src="https://lottie.host/b14b1f78-edab-449a-98b8-d65dff04fd4c/gRh1VWd2YQ.lottie" autoplay loop
+                style="width: 200px; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 9999; display: none;">
+            </dotlottie-wc>
+        </div>
+        <script src="../jersey-configurator/auth.js"></script>
+        <script src="script.js"></script>
+</body>
+
+</html>
+

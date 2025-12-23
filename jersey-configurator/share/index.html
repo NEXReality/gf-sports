@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Jersey Configurator</title>
+    <link rel="icon" type="image/x-icon" href="../../images/gf_sports.ico">
+    <meta name="title" content="3D Jersey Configurator">
+    <meta name="keywords" content="3D socks configurator, 3D jersey configurator, custom socks designer, custom jersey designer, 3D custom socks, 3D custom jersey, online socks configurator, online jersey configurator, socks design tool, jersey design tool, personalized socks maker, personalized jersey maker, sportswear configurator, teamwear configurator, 3D apparel configurator, interactive socks designer, interactive jersey designer, custom sportswear generator, socks customization software, jersey customization software">
+    <meta name="description" content="Design custom socks and jerseys in real time using an interactive 3D configurator. Create, personalize, visualize, and order sportswear online with ease.">
+    <link rel="canonical" href="https://globe-fashion.com/">
+    <meta property="og:image" content="../../images/og_image.jpg">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://globe-fashion.com/">
+    <meta property="og:title" content="GF Sports">
+    <meta property="og:description" content="Design custom socks and jerseys in real time using an interactive 3D configurator. Create, personalize, visualize, and order sportswear online with ease.">
+    <meta name="twitter:title" content="GF Sports">
+    <meta name="twitter:url" content="https://globe-fashion.com/">
+    <meta name="twitter:description" content="Design custom socks and jerseys in real time using an interactive 3D configurator. Create, personalize, visualize, and order sportswear online with ease.">
+    <meta name="twitter:image" content="../../images/og_image.jpg">
+    <meta name="twitter:card" content="summary">
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-J218ER51C4"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag('js', new Date());
+      gtag('config', 'G-J218ER51C4');
+    </script>
+    <link rel="stylesheet" href="../../styles.css?v=2.0">
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    
+    <!-- Import map for Three.js modules -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.181.2/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.181.2/examples/jsm/"
+            }
+        }
+    </script>
+    
+    <!-- Fabric.js for SVG texture manipulation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+</head>
+<body class="share-page">
+    <div id="root">
+        <header class="header-share">
+            <div class="header-content">
+                <div class="brand">
+                    <img class="brand-logo" src="../../images/jersey_logo.svg" alt="Jersey logo">
+                    <span class="brand-name">
+                        <a href="/index.html" data-en style="text-decoration: none; color: black;">3D Jersey Configurator</a>
+                        <span data-fr style="display: none;">Configurateur de Maillot 3D</span>
+                    </span>
+                </div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="viewer-section">
+                <div class="viewer-container">
+                    <!-- 3D Model will be loaded here -->
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="https://unpkg.com/@lottiefiles/dotlottie-wc@latest/dist/dotlottie-wc.js"></script>
+    <script type="module">
+        // Import and initialize the 3D viewer
+        import { JerseyViewer } from '../threeD-script.js';
+        
+        // Initialize viewer for share page
+        window.jerseyViewer = new JerseyViewer('.viewer-container');
+    </script>
+    <script type="module" src="script.js"></script>
+</body>
+</html>
+

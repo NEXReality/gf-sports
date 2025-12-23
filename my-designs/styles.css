@@ -1,0 +1,191 @@
+/* My Designs specific styles */
+:root {
+    --color-destructive: #d10000;
+}
+
+/* Force logout button to be visible when logged in */
+#logout-btn.force-visible {
+    display: flex !important;
+}
+
+.my-designs-container {
+    padding: 2rem;
+    max-width: 1200px;
+    margin: 64px auto 0;
+}
+
+.page-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 2rem;
+    color: var(--color-text);
+}
+
+.designs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.design-card {
+    background: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    cursor: pointer;
+}
+
+.design-header {
+    padding: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+}
+
+.design-title {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--color-text);
+    transition: color 0.3s ease;
+    flex: 1;
+    margin: 0;
+    padding: 0;
+}
+
+.design-title[contenteditable="true"] {
+    outline: none;
+    border-bottom: 1px dashed var(--color-border);
+    padding: 2px;
+}
+
+.design-title.renaming {
+    color: var(--color-text-secondary);
+}
+
+.design-title[contenteditable="true"]:focus {
+    border-bottom: 1px solid var(--color-primary);
+}
+
+.menu-button {
+    padding: 0.5rem;
+    background: none;
+    border: none;
+    border-radius: var(--radius-full);
+    cursor: pointer;
+    color: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 26px;
+    width: 26px;
+}
+
+.menu-button svg {
+    width: 4px;
+    height: 16px;
+}
+
+.menu-button:hover {
+    background: var(--color-surface);
+}
+
+.design-menu {
+    position: absolute;
+    top: 100%;
+    right: 0.5rem;
+    background: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    min-width: 160px;
+    margin-top: 0.25rem;
+}
+
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: none;
+    background: none;
+    color: var(--color-text);
+    font-size: 0.875rem;
+    text-align: left;
+    cursor: pointer;
+    visibility: visible;
+    opacity: 1;
+}
+
+.menu-item:hover {
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+}
+
+.menu-item svg {
+    color: var(--color-text-secondary);
+}
+
+.menu-item.delete-button {
+    color: var(--color-destructive);
+}
+
+.menu-item.delete-button svg {
+    color: var(--color-destructive);
+}
+
+.menu-item.delete-button:hover svg {
+    color: var(--color-destructive);
+}
+
+.design-preview {
+    aspect-ratio: 16 / 9;
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin: 0 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.design-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+}
+
+.design-footer {
+    padding: 1rem;
+    margin-top: auto;
+}
+
+.creation-date {
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .my-designs-container {
+        padding: 1.5rem 1rem;
+    }
+
+    .designs-grid {
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 1rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .designs-grid {
+        grid-template-columns: 1fr;
+    }
+}

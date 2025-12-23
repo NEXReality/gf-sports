@@ -1,0 +1,9 @@
+{
+  "familyOrder": ["graphic", "jacquard", "stripes", "uni_design"],
+  "designOrder": {
+    "graphic": ["aurora"],
+    "jacquard": ["classic"],
+    "stripes": ["the_grey"],
+    "uni_design": ["flame_red"]
+    }
+}

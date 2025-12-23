@@ -1,0 +1,220 @@
+/* Admin specific styles */
+.admin-container {
+    padding: 2rem;
+    max-width: 1600px;
+    margin: 64px auto 0;
+}
+
+.page-header {
+    margin-bottom: 2rem;
+}
+
+.brand-logo {
+    height: 30px;
+    width: auto;
+}
+
+.page-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+/* Admin menu styles */
+.admin-menu {
+    position: relative;
+}
+
+.admin-menu .nav-link {
+    position: relative;
+    display: flex !important;
+}
+
+.admin-menu .nav-link.active {
+    background: var(--color-primary);
+    color: white;
+}
+
+/* Orders table styles */
+.orders-table {
+    background: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin-bottom: 2rem;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th {
+    text-align: left;
+    padding: 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text);
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+}
+
+td {
+    padding: 1rem;
+    font-size: 0.875rem;
+    color: var(--color-text);
+    border-bottom: 1px solid var(--color-border);
+}
+
+tr:last-child td {
+    border-bottom: none;
+}
+
+/* Order ID link style */
+.order-id {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+/* Pagination styles */
+.pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 0;
+}
+
+.pagination-info {
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+}
+
+.pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.pagination-button {
+    padding: 0.5rem 1rem;
+    background: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    font-size: 0.875rem;
+    color: var(--color-text);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.pagination-button:hover:not(:disabled) {
+    background: var(--color-surface);
+}
+
+.pagination-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.page-numbers {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.page-number {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-background);
+    font-size: 0.875rem;
+    color: var(--color-text);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.page-number:hover:not(.active) {
+    background: var(--color-surface);
+}
+
+.page-number.active {
+    background: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+}
+
+.clickable-link {
+    color: var(--color-primary);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.clickable-link:hover {
+    text-decoration: underline;
+}
+
+.page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+.filter-container {
+    position: relative;
+}
+
+.filter-button {
+    display: flex;
+    align-items: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: inherit;
+    gap: 5px;
+}
+
+.filter-button svg {
+    margin-right: 5px;
+}
+
+.filter-popup {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 180%;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    border-radius: var(--radius-lg);
+}
+
+.filter-popup.show {
+    display: block;
+}
+
+.filter-option {
+    display: block;
+    width: 100%;
+    padding: 10px 20px;
+    text-align: left;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    border-radius: var(--radius-lg);
+}
+
+.filter-option:hover {
+    background-color: var(--color-surface);
+}
+
+/* Force logout button to be visible when logged in */
+#logout-btn.force-visible {
+    display: flex !important;
+}
