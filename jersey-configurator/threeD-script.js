@@ -58,21 +58,38 @@ function getURLParameters() {
     };
 }
 
+
+// Helper function to calculate the correct base path based on current page depth
+// This ensures resources load correctly from both /jersey-configurator/ and /jersey-configurator/admin-design/
+function getBasePath() {
+    const path = window.location.pathname;
+    // Count how many directories deep we are from jersey-configurator/
+    // e.g., /jersey-configurator/index.html -> 0 levels deep -> '../'
+    // e.g., /jersey-configurator/admin-design/index.html -> 1 level deep -> '../../'
+    const depth = (path.match(/\/jersey-configurator\/([^/]+\/)/g) || []).length;
+    return depth === 0 ? '../' : '../../';
+}
+
 // Helper function to get model path based on selections
 function getModelPath(collar, shoulder) {
     const key = `${collar}_${shoulder}`;
     const filename = MODEL_MAP[key];
+    const basePath = getBasePath();
 
     if (!filename) {
         console.warn(`No model found for ${collar} + ${shoulder}, using default`);
-        return '../jersey_3d_models/insert_collar_reglan_01.glb';
+        return `${basePath}jersey_3d_models/insert_collar_reglan_01.glb`;
     }
 
-    return `../jersey_3d_models/${filename}`;
+    return `${basePath}jersey_3d_models/${filename}`;
 }
+
 
 // Make getModelPath available globally for use in script.js
 window.getModelPath = getModelPath;
+
+// Make getBasePath available globally for use in script.js
+window.getBasePath = getBasePath;
 
 class JerseyViewer {
     constructor(containerId) {
@@ -257,10 +274,15 @@ class JerseyViewer {
         this.setupLogoInteraction();
 
         // Load custom control icons
+        // Determine correct path based on current page location
+        const currentPath = window.location.pathname;
+        const isInSubfolder = currentPath.includes('/admin-design/') || currentPath.includes('/share/');
+        const iconBasePath = isInSubfolder ? '../../images/' : '../images/';
+
         this.deleteIcon = new Image();
-        this.deleteIcon.src = '../images/delete.svg';
+        this.deleteIcon.src = iconBasePath + 'delete.svg';
         this.copyIcon = new Image();
-        this.copyIcon.src = '../images/copy.svg';
+        this.copyIcon.src = iconBasePath + 'copy.svg';
     }
 
     /**
@@ -2258,8 +2280,8 @@ class JerseyViewer {
         ctx.save();
         ctx.translate(left, top);
 
-        // Draw the delete icon image if loaded
-        if (this.deleteIcon && this.deleteIcon.complete) {
+        // Draw the delete icon image if loaded and valid
+        if (this.deleteIcon && this.deleteIcon.complete && this.deleteIcon.naturalWidth > 0) {
             ctx.drawImage(this.deleteIcon, -size / 2, -size / 2, size, size);
         } else {
             // Fallback: Draw red circle with white X if image not loaded
@@ -2289,8 +2311,8 @@ class JerseyViewer {
         ctx.save();
         ctx.translate(left, top);
 
-        // Draw the copy icon image if loaded
-        if (this.copyIcon && this.copyIcon.complete) {
+        // Draw the copy icon image if loaded and valid
+        if (this.copyIcon && this.copyIcon.complete && this.copyIcon.naturalWidth > 0) {
             ctx.drawImage(this.copyIcon, -size / 2, -size / 2, size, size);
         } else {
             // Fallback: Draw green circle with white + if image not loaded
@@ -2559,8 +2581,20 @@ class JerseyViewer {
         if (config.activeTab === 'designs' && config.design) {
             // Load design mode configuration
             if (config.design.svgPath) {
-                debugLog(`Loading SVG design: ${config.design.svgPath}`);
-                this.loadSVGDesign(config.design.svgPath);
+                // Recalculate SVG path to ensure correct depth for current page location
+                let svgPath = config.design.svgPath;
+
+                // Try to recalculate path if we have the necessary info
+                if (config.design.familyId && config.collar && config.shoulder) {
+                    const designId = window.getDesignIdFromSvgPath ? window.getDesignIdFromSvgPath(config.design.svgPath) : null;
+                    if (designId && window.getDesignSvgPath) {
+                        svgPath = window.getDesignSvgPath(config.design.familyId, designId, config.collar, config.shoulder);
+                        debugLog(`📐 Recalculated SVG path in loadInitialConfig: ${svgPath} (was: ${config.design.svgPath})`);
+                    }
+                }
+
+                debugLog(`Loading SVG design: ${svgPath}`);
+                this.loadSVGDesign(svgPath);
                 willLoadSVG = true;
             }
 
@@ -3058,7 +3092,8 @@ class JerseyViewer {
         // Load ribbed collar normal map texture if not already loaded
         if (enabled && !this.ribbedCollarNormalMap) {
             const textureLoader = new THREE.TextureLoader();
-            this.ribbedCollarNormalMap = textureLoader.load('../images/collar_nm.jpg',
+            const basePath = getBasePath();
+            this.ribbedCollarNormalMap = textureLoader.load(`${basePath}images/collar_nm.jpg`,
                 (texture) => {
                     debugLog('✓ Ribbed collar normal map loaded successfully');
                     texture.wrapS = THREE.RepeatWrapping;
@@ -3242,6 +3277,124 @@ class JerseyViewer {
             offscreenCanvas.toBlob(resolve, 'image/webp', 0.9);
         });
     }
+
+    /**
+     * Take a screenshot of the current view and download it as PNG
+     * This captures the exact current camera position and viewport
+     */
+    takeCurrentViewScreenshot() {
+        if (!this.renderer || !this.camera || !this.scene) {
+            console.error('3D viewer not fully initialized');
+            return;
+        }
+
+        // Store original render settings
+        const originalRenderTarget = this.renderer.getRenderTarget();
+        const originalAspect = this.camera.aspect;
+        const originalToneMapping = this.renderer.toneMapping;
+        const originalExposure = this.renderer.toneMappingExposure;
+        const originalOutputEncoding = this.renderer.outputEncoding;
+
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const aspectRatio = viewportWidth / viewportHeight;
+
+        let newWidth, newHeight;
+        if (aspectRatio > 16 / 9) {
+            newWidth = 3200;
+            newHeight = Math.round(3200 / aspectRatio);
+        } else {
+            newHeight = 1800;
+            newWidth = Math.round(1800 * aspectRatio);
+        }
+
+        // Adjust camera aspect ratio
+        this.camera.aspect = newWidth / newHeight;
+        this.camera.updateProjectionMatrix();
+
+        const renderTarget = new THREE.WebGLRenderTarget(newWidth, newHeight, {
+            format: THREE.RGBAFormat,
+            type: THREE.UnsignedByteType,
+            encoding: this.renderer.outputEncoding, // Preserve renderer's encoding
+        });
+
+        // Render to offscreen target
+        this.renderer.setRenderTarget(renderTarget);
+        this.renderer.render(this.scene, this.camera);
+
+        // Read pixels from the render target
+        const gl = this.renderer.getContext();
+        const pixels = new Uint8Array(newWidth * newHeight * 4);
+        gl.readPixels(0, 0, newWidth, newHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+        // Create an offscreen canvas
+        const offscreenCanvas = document.createElement('canvas');
+        offscreenCanvas.width = newWidth;
+        offscreenCanvas.height = newHeight;
+        const ctx = offscreenCanvas.getContext('2d');
+
+        // Convert linear colors to sRGB for correct brightness
+        // Helper function to convert a single linear color value to sRGB
+        const linearToSRGB = (c) => {
+            return c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1.0 / 2.4) - 0.055;
+        };
+
+        const imageData = ctx.createImageData(newWidth, newHeight);
+        for (let y = 0; y < newHeight; y++) {
+            const sourceY = newHeight - y - 1; // Flip vertically
+            const sourceOffset = sourceY * newWidth * 4;
+            const destOffset = y * newWidth * 4;
+
+            // Copy and convert each pixel from linear to sRGB
+            for (let x = 0; x < newWidth; x++) {
+                const pixelSourceOffset = sourceOffset + x * 4;
+                const pixelDestOffset = destOffset + x * 4;
+
+                // Convert RGB channels from linear (0-255) to sRGB
+                const r = pixels[pixelSourceOffset] / 255.0;
+                const g = pixels[pixelSourceOffset + 1] / 255.0;
+                const b = pixels[pixelSourceOffset + 2] / 255.0;
+                const a = pixels[pixelSourceOffset + 3];
+
+                imageData.data[pixelDestOffset] = Math.round(linearToSRGB(r) * 255);
+                imageData.data[pixelDestOffset + 1] = Math.round(linearToSRGB(g) * 255);
+                imageData.data[pixelDestOffset + 2] = Math.round(linearToSRGB(b) * 255);
+                imageData.data[pixelDestOffset + 3] = a; // Alpha stays the same
+            }
+        }
+        ctx.putImageData(imageData, 0, 0);
+
+        // Restore original render settings
+        this.renderer.setRenderTarget(originalRenderTarget);
+        this.camera.aspect = originalAspect;
+        this.camera.updateProjectionMatrix();
+        this.renderer.toneMapping = originalToneMapping;
+        this.renderer.toneMappingExposure = originalExposure;
+        this.renderer.outputEncoding = originalOutputEncoding;
+        this.renderer.render(this.scene, this.camera);
+
+        // Convert canvas to data URL and trigger download
+        // Using data URL instead of blob for better Chrome filename support
+        const dataUrl = offscreenCanvas.toDataURL('image/png');
+
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = 'current_view_screenshot.png';
+        link.style.display = 'none';
+
+        // Append to body, click, and clean up
+        document.body.appendChild(link);
+        link.click();
+
+        // Clean up after download
+        setTimeout(() => {
+            document.body.removeChild(link);
+        }, 100);
+
+        // Cleanup
+        renderTarget.dispose();
+    }
+
 
     // Switch to Colors & Stripes mode (hide design, show stripes)
     switchToColorsMode() {
@@ -3473,6 +3626,12 @@ function initViewer() {
     window.takeScreenshot = async () => {
         return jerseyViewer.takeScreenshot();
     };
+
+    // Expose takeCurrentViewScreenshot method globally for screenshot button
+    window.takeCurrentViewScreenshot = () => {
+        jerseyViewer.takeCurrentViewScreenshot();
+    };
+
 
     // Expose hideCanvasLoader globally for script.js to call when ALL loading is complete
     window.hideCanvasLoader = () => {

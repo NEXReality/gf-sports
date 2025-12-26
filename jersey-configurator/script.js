@@ -334,6 +334,89 @@ function getSupabaseClient() {
   return null;
 }
 
+// ==================== DOWNLOAD FUNCTIONALITY ====================
+// Function to download JSON
+function downloadDesignJSON(data, filename) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const link = document.createElement("a");
+  if (link.download !== undefined) {
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+}
+
+function getShortCodeFromUrl() {
+  const urlParams = new URLSearchParams(window.location.search);
+  return urlParams.get('shortCode');
+}
+
+async function fetchDesignData(shortCode) {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    console.error('Supabase client not available');
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from('user_files')
+    .select('design_name, custom_name, design_metadata, short_code, id')
+    .eq('short_code', shortCode)
+    .single();
+
+  if (error) {
+    console.error('Error fetching design data:', error);
+    return null;
+  }
+
+  return data;
+}
+
+// Function to handle the download
+async function handleDownload() {
+  try {
+    const shortCode = getShortCodeFromUrl();
+
+    const data = await fetchDesignData(shortCode);
+
+    if (data && data.design_metadata) {
+      downloadDesignJSON(data.design_metadata, `jersey_configuration_${shortCode}.json`);
+    } else {
+      console.log("No design metadata found for the given short code");
+    }
+  } catch (error) {
+    console.error("Error downloading design metadata:", error);
+  }
+}
+
+// Event listener for download button
+document.addEventListener("DOMContentLoaded", () => {
+  const downloadButton = document.getElementById("download-button");
+
+  if (downloadButton) {
+    downloadButton.addEventListener("click", handleDownload);
+  }
+
+  // Screenshot button functionality
+  const screenshotButton = document.getElementById('screenshot-button');
+  if (screenshotButton) {
+    screenshotButton.addEventListener('click', () => {
+      // Call the globally exposed function from threeD-script.js
+      if (typeof window.takeCurrentViewScreenshot === 'function') {
+        window.takeCurrentViewScreenshot();
+      } else {
+        console.error('Screenshot function not available yet');
+      }
+    });
+  }
+});
+
+
 // Design configuration - loaded from design-config.json
 // Simple format: just specifies display order, paths are derived from folder names
 let familyOrder = [];   // Order of families: ["graphic", "jacquard", ...]
@@ -364,19 +447,29 @@ function normalizeTypeValue(value, fallback) {
   return v || fallback;
 }
 
+// Helper function to get the correct base path based on current page location
+function getBasePath() {
+  const currentPath = window.location.pathname;
+  const isInSubfolder = currentPath.includes('/admin-design/') || currentPath.includes('/share/');
+  return isInSubfolder ? '../../' : '../';
+}
+
 // Path helpers for the folder structure
 function getFamilyThumbnailPath(familyId, collar, shoulder) {
   // Family thumbnails are per model type (collar + shoulder)
-  // Example: ../designs/design_family/graphic/insert_reglan_graphic_thumb.webp
-  return `../designs/design_family/${familyId}/${collar}_${shoulder}_${familyId}_thumb.webp`;
+  const basePath = typeof getBasePath === 'function' ? getBasePath() : '../';
+  return `${basePath}designs/design_family/${familyId}/${collar}_${shoulder}_${familyId}_thumb.webp`;
 }
 
 function getDesignIconPath(familyId, designId, collar, shoulder) {
-  return `../designs/icons/${familyId}/${designId}/${collar}_${shoulder}_${designId}_thumb.webp`;
+  const basePath = typeof getBasePath === 'function' ? getBasePath() : '../';
+  return `${basePath}designs/icons/${familyId}/${designId}/${collar}_${shoulder}_${designId}_thumb.webp`;
 }
 
 function getDesignSvgPath(familyId, designId, collar, shoulder) {
-  return `../designs/svg/${familyId}/${designId}/${collar}_${shoulder}_${designId}.svg`;
+  // Use getBasePath() if available (from threeD-script.js), otherwise fallback to '../'
+  const basePath = typeof getBasePath === 'function' ? getBasePath() : '../';
+  return `${basePath}designs/svg/${familyId}/${designId}/${collar}_${shoulder}_${designId}.svg`;
 }
 
 function getDesignIdFromSvgPath(svgPath) {
@@ -451,10 +544,11 @@ function loadDesignFamilies() {
     img.src = thumbnailPath;
     img.alt = displayName;
     img.onerror = function () {
-      // Fallback to legacy single thumbnail (if present): ../designs/{familyId}.webp
+      // Fallback to legacy single thumbnail (if present): {basePath}designs/{familyId}.webp
       if (!img.dataset.fallbackTried) {
         img.dataset.fallbackTried = '1';
-        img.src = `../designs/${familyId}.webp`;
+        const basePath = getBasePath();
+        img.src = `${basePath}designs/${familyId}.webp`;
         return;
       }
 
@@ -535,7 +629,7 @@ function loadFamilyDesigns(familyId) {
 
   // Get current collar and shoulder from URL parameters
   const { collar, shoulder } = getCurrentCollarAndShoulder();
-  
+
   // Get designs for this family from config
   const familyDesigns = designOrder[familyId] || [];
   console.log(`Loading ${familyDesigns.length} design(s) from ${toDisplayName(familyId)} for: ${collar}_${shoulder}`);
@@ -747,8 +841,8 @@ backButton.addEventListener('click', () => {
     const ribbedCollarGroup = document.getElementById('ribbed-collar-group-designs');
     if (ribbedCollarGroup) ribbedCollarGroup.style.display = 'none';
 
-      // Design was manually selected, show thumbnails
-      designThumbnails.style.display = 'grid';
+    // Design was manually selected, show thumbnails
+    designThumbnails.style.display = 'grid';
   } else {
     // If showing designs, go back to families
     loadDesignFamilies();
@@ -2847,82 +2941,94 @@ function loadJerseyConfiguration(isSavedDesign) {
       if (config.design.familyId && config.design.svgPath) {
         // With simplified config, just use the familyId directly
         currentFamily = config.design.familyId;
+
+        // Recalculate the SVG path to ensure correct depth for current page location
+        // Extract design ID from the saved path
+        const designId = getDesignIdFromSvgPath(config.design.svgPath);
+        if (designId && config.collar && config.shoulder) {
+          // Recalculate path with correct depth
+          currentDesign = getDesignSvgPath(config.design.familyId, designId, config.collar, config.shoulder);
+          debugLog(`📐 Recalculated SVG path: ${currentDesign} (was: ${config.design.svgPath})`);
+        } else {
+          // Fallback to saved path if we can't recalculate
           currentDesign = config.design.svgPath;
+          debugLog(`⚠️ Using saved SVG path: ${currentDesign}`);
+        }
 
-          // Load the family designs and show customization panel
-          setTimeout(() => {
+        // Load the family designs and show customization panel
+        setTimeout(() => {
           loadFamilyDesigns(config.design.familyId);
-            setTimeout(async () => {
-              // Update header to "Family - Design"
-              const restoredDesignId = getDesignIdFromSvgPath(config.design.svgPath);
-              if (restoredDesignId) {
-                familyName.textContent = `${toDisplayName(config.design.familyId)} - ${toDisplayName(restoredDesignId)}`;
-              }
+          setTimeout(async () => {
+            // Update header to "Family - Design"
+            const restoredDesignId = getDesignIdFromSvgPath(config.design.svgPath);
+            if (restoredDesignId) {
+              familyName.textContent = `${toDisplayName(config.design.familyId)} - ${toDisplayName(restoredDesignId)}`;
+            }
 
-              // Check if we have saved design colors
-              const hasSavedColors = config.design.designColors && config.design.designColors.length > 0;
+            // Check if we have saved design colors
+            const hasSavedColors = config.design.designColors && config.design.designColors.length > 0;
 
-              // Always fetch SVG to get class names
-              debugLog('🔍 Fetching SVG...');
-              try {
-                const response = await fetch(config.design.svgPath);
-                const svgText = await response.text();
-                const detectedColors = detectUniqueColors(svgText);
+            // Always fetch SVG to get class names (use recalculated path)
+            debugLog('🔍 Fetching SVG...');
+            try {
+              const response = await fetch(currentDesign);
+              const svgText = await response.text();
+              const detectedColors = detectUniqueColors(svgText);
 
-                if (hasSavedColors) {
-                  // Use saved colors with detected class names
-                  debugLog('📦 Mapping saved colors to detected classes');
-                  window.currentSVGColors = detectedColors.map((item, index) => ({
-                    className: item.className,
-                    color: config.design.designColors[index] || item.color
-                  }));
-                  debugLog('✅ Mapped colors:', window.currentSVGColors);
-                } else {
-                  // Use detected colors
-                  debugLog('🔍 Using detected colors');
-                  window.currentSVGColors = detectedColors;
-                }
-                debugLog('✅ SVG processing complete, currentSVGColors set');
-              } catch (error) {
-                console.error('Error loading SVG:', error);
-                window.currentSVGColors = [];
-              }
-
-              debugLog('📋 About to call showDesignCustomization()');
-
-              // Set up event listener BEFORE calling showDesignCustomization
               if (hasSavedColors) {
-                debugLog('🔧 Setting up colorPickersReady listener');
-                const colorRestoreHandler = () => {
-                  // Wait for SVG to load before restoring colors
-                  setTimeout(() => {
-                    debugLog('🔄 Applying saved colors to SVG...');
-                    restoreDesignColors(config.design.designColors);
-                  }, 1000); // Wait for SVG to load into hidden container (1s for slower machines)
-                  window.removeEventListener('colorPickersReady', colorRestoreHandler);
-                };
-                window.addEventListener('colorPickersReady', colorRestoreHandler);
+                // Use saved colors with detected class names
+                debugLog('📦 Mapping saved colors to detected classes');
+                window.currentSVGColors = detectedColors.map((item, index) => ({
+                  className: item.className,
+                  color: config.design.designColors[index] || item.color
+                }));
+                debugLog('✅ Mapped colors:', window.currentSVGColors);
+              } else {
+                // Use detected colors
+                debugLog('🔍 Using detected colors');
+                window.currentSVGColors = detectedColors;
               }
+              debugLog('✅ SVG processing complete, currentSVGColors set');
+            } catch (error) {
+              console.error('Error loading SVG:', error);
+              window.currentSVGColors = [];
+            }
 
-              showDesignCustomization();
-              debugLog('✅ showDesignCustomization() completed');
+            debugLog('📋 About to call showDesignCustomization()');
 
-              // Dispatch the designSelected event to load the SVG on the 3D model
-              const designSelectedEvent = new CustomEvent('designSelected', {
-                detail: { svgPath: config.design.svgPath }
-              });
-              window.dispatchEvent(designSelectedEvent);
-
-              // Load the 3D configuration (for logos and other settings)
-              setTimeout(() => {
-                loadJustThe3DConfig(config);
-                // Hide canvas loader after all async operations complete
+            // Set up event listener BEFORE calling showDesignCustomization
+            if (hasSavedColors) {
+              debugLog('🔧 Setting up colorPickersReady listener');
+              const colorRestoreHandler = () => {
+                // Wait for SVG to load before restoring colors
                 setTimeout(() => {
-                  if (window.hideCanvasLoader) window.hideCanvasLoader();
-                }, 800);
-              }, 200);
-            }, 100);
+                  debugLog('🔄 Applying saved colors to SVG...');
+                  restoreDesignColors(config.design.designColors);
+                }, 1000); // Wait for SVG to load into hidden container (1s for slower machines)
+                window.removeEventListener('colorPickersReady', colorRestoreHandler);
+              };
+              window.addEventListener('colorPickersReady', colorRestoreHandler);
+            }
+
+            showDesignCustomization();
+            debugLog('✅ showDesignCustomization() completed');
+
+            // Dispatch the designSelected event to load the SVG on the 3D model (use recalculated path)
+            const designSelectedEvent = new CustomEvent('designSelected', {
+              detail: { svgPath: currentDesign }
+            });
+            window.dispatchEvent(designSelectedEvent);
+
+            // Load the 3D configuration (for logos and other settings)
+            setTimeout(() => {
+              loadJustThe3DConfig(config);
+              // Hide canvas loader after all async operations complete
+              setTimeout(() => {
+                if (window.hideCanvasLoader) window.hideCanvasLoader();
+              }, 800);
+            }, 200);
           }, 100);
+        }, 100);
       }
     } else if (config.activeTab === 'colors') {
       // Load colors & stripes mode configuration
@@ -3138,7 +3244,7 @@ async function detectSharedDesign() {
               .select('owner')
               .eq('short_code', shortCode)
               .single();
-            
+
             if (ownerData && ownerData.owner === user.id) {
               // User owns this design - enable direct save/overwrite
               currentDesignId = data.id;
