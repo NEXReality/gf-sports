@@ -1,9 +1,45 @@
 {
-  "familyOrder": ["graphic", "jacquard", "stripes", "uni_design"],
+  "familyOrder": [
+    "graphic",
+    "jacquard",
+    "stripes",
+    "uni_design"
+  ],
   "designOrder": {
-    "graphic": ["aurora"],
-    "jacquard": ["classic"],
-    "stripes": ["the_grey"],
-    "uni_design": ["flame_red"]
-    }
+    "graphic": [
+      "concrete",
+      "monarch",
+      "pulse",
+      "royal",
+      "rush",
+      "signature",
+      "vortex"
+    ],
+    "jacquard": [
+      "classic",
+      "crest",
+      "echo",
+      "legacy",
+      "prime"
+    ],
+    "stripes": [
+      "captain",
+      "derby",
+      "milano",
+      "onyx",
+      "prism"
+    ],
+    "uni_design": [
+      "asphalt",
+      "blaze",
+      "flux",
+      "glitch",
+      "ignite",
+      "ironclad",
+      "raptor",
+      "revolt",
+      "savage",
+      "velocity"
+    ]
+  }
 }
