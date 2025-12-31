@@ -416,7 +416,7 @@ async function updateUIBasedOnLoginStatus() {
   const isLoggedIn = await checkUserLoggedIn()
   const currentLang = localStorage.getItem("language") || "en"
 
-  // 1. Show/hide .nav-link (always show home button, only show My Designs/Place Order when logged in)
+  // 1. Show/hide .nav-link (always show home button and Configurator, only show My Designs/Place Order when logged in)
   const navLinks = document.querySelectorAll(".nav-link")
   navLinks.forEach((link) => {
     // Always show home button
@@ -424,8 +424,13 @@ async function updateUIBasedOnLoginStatus() {
       link.style.display = "flex"
       return
     }
-    // Only show "My Designs" and "Place Order" when logged in
+    // Always show Configurator link
     const linkText = link.textContent.trim()
+    if (linkText.includes('Configurator') || linkText.includes('Configurateur')) {
+      link.style.display = "flex"
+      return
+    }
+    // Only show "My Designs" and "Place Order" when logged in
     if (linkText.includes('My Designs') || linkText.includes('Mes Designs') ||
       linkText.includes('Place Order') || linkText.includes('Passer Commande')) {
       link.style.display = isLoggedIn ? "flex" : "none"

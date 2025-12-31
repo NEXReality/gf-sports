@@ -7,6 +7,26 @@ if (typeof window.supabaseClient === 'undefined') {
 // Use var to allow redeclaration if script runs multiple times
 var supabase = window.supabaseClient;
 
+// Helper function to get base path (repository name) for GitHub Pages
+// Returns '/gf-sports' on GitHub Pages or '' for local development
+function getBasePath() {
+    const pathname = window.location.pathname;
+    // Extract repo name from path like /gf-sports/jersey-configurator/index.html
+    const pathParts = pathname.split('/').filter(part => part);
+    
+    // If we're on GitHub Pages, the first part is usually the repo name
+    // Check if we're on github.io domain
+    if (window.location.hostname.includes('github.io')) {
+        // On GitHub Pages, first path segment is the repo name
+        if (pathParts.length > 0) {
+            return `/${pathParts[0]}`;
+        }
+    }
+    
+    // For local development or if no repo name found, return empty string
+    return '';
+}
+
 // Function to get the current language
 function getCurrentLanguage() {
   return localStorage.getItem("language") || "en"
@@ -272,8 +292,9 @@ if (forgotPasswordForm) {
     const email = document.getElementById('forgotPasswordEmail').value;
 
     try {
+      const basePath = getBasePath();
       const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + '/reset-password/'
+        redirectTo: window.location.origin + basePath + '/reset-password/'
       });
 
       if (error) throw error;

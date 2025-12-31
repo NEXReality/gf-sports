@@ -2,6 +2,43 @@
 // Use window.SUPABASE_URL directly to avoid redeclaration conflict
 const SUPABASE_URL_VALUE = window.SUPABASE_URL || 'https://jvuibcqogyyffylvfeog.supabase.co';
 
+// Helper function to get base path (repository name) for GitHub Pages
+// Returns '/gf-sports' on GitHub Pages or '' for local development
+function getBasePath() {
+    const pathname = window.location.pathname;
+    // Extract repo name from path like /gf-sports/admin-my-designs/index.html
+    const pathParts = pathname.split('/').filter(part => part);
+    
+    // Known subdirectories that indicate we're inside the repo
+    const knownSubdirs = ['admin-my-designs', 'admin', 'jersey-configurator', 'socks-configurator', 
+                          'my-designs', 'place-order', 'order-details', 'reset-password'];
+    
+    // If we're on GitHub Pages
+    if (window.location.hostname.includes('github.io')) {
+        // Check if first path part is a known subdirectory (means repo name is missing from URL)
+        if (pathParts.length > 0 && knownSubdirs.includes(pathParts[0])) {
+            // Repo name is missing, but we know it should be 'gf-sports' for this GitHub Pages site
+            return '/gf-sports';
+        }
+        
+        // Check if we're in a known subdirectory
+        const subdirIndex = pathParts.findIndex(part => knownSubdirs.includes(part));
+        if (subdirIndex > 0) {
+            // Repo name is the part before the known subdirectory
+            return `/${pathParts[subdirIndex - 1]}`;
+        } else if (subdirIndex === -1 && pathParts.length > 0) {
+            // Not in a known subdir, first part is likely the repo name
+            return `/${pathParts[0]}`;
+        } else if (subdirIndex === 0) {
+            // Directly in a subdirectory without repo name - return repo name for this site
+            return '/gf-sports';
+        }
+    }
+    
+    // For local development or if no repo name found, return empty string
+    return '';
+}
+
 const urlParams = new URLSearchParams(window.location.search);
 const ownerId = urlParams.get('owner');
 if (ownerId) {
@@ -78,10 +115,11 @@ document.addEventListener('DOMContentLoaded', renderDesigns);
 function openDesign(shortCode, productType) {
   // Determine the correct admin-design path based on product_type
   // Default to socks if product_type is missing/null
+  const basePath = getBasePath();
   const adminDesignPath = productType === 'jersey' 
     ? '/jersey-configurator/admin-design/' 
     : '/socks-configurator/admin-design/';
   
-  const designUrl = `${window.location.origin}${adminDesignPath}?shortCode=${shortCode}`;
+  const designUrl = `${window.location.origin}${basePath}${adminDesignPath}?shortCode=${shortCode}`;
   window.open(designUrl, '_blank');
 }

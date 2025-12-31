@@ -1,80 +1,928 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3D Jersey Configurator</title>
-    <link rel="icon" type="image/x-icon" href="../../images/gf_sports.ico">
-    <meta name="title" content="3D Jersey Configurator">
-    <meta name="keywords" content="3D socks configurator, 3D jersey configurator, custom socks designer, custom jersey designer, 3D custom socks, 3D custom jersey, online socks configurator, online jersey configurator, socks design tool, jersey design tool, personalized socks maker, personalized jersey maker, sportswear configurator, teamwear configurator, 3D apparel configurator, interactive socks designer, interactive jersey designer, custom sportswear generator, socks customization software, jersey customization software">
-    <meta name="description" content="Design custom socks and jerseys in real time using an interactive 3D configurator. Create, personalize, visualize, and order sportswear online with ease.">
+    <link rel="icon" type="image/x-icon" href="../images/gf_sports.ico">
+    <meta name="title" content="3D jersey Configurator">
+    <meta name="keywords"
+        content="3D socks configurator, 3D jersey configurator, custom socks designer, custom jersey designer, 3D custom socks, 3D custom jersey, online socks configurator, online jersey configurator, socks design tool, jersey design tool, personalized socks maker, personalized jersey maker, sportswear configurator, teamwear configurator, 3D apparel configurator, interactive socks designer, interactive jersey designer, custom sportswear generator, socks customization software, jersey customization software">
+    <meta name="description"
+        content="Design custom socks and jerseys in real time using an interactive 3D configurator. Create, personalize, visualize, and order sportswear online with ease.">
     <link rel="canonical" href="https://globe-fashion.com/">
-    <meta property="og:image" content="../../images/og_image.jpg">
+    <meta property="og:image" content="../images/og_image.jpg">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://globe-fashion.com/">
     <meta property="og:title" content="GF Sports">
-    <meta property="og:description" content="Design custom socks and jerseys in real time using an interactive 3D configurator. Create, personalize, visualize, and order sportswear online with ease.">
+    <meta property="og:description"
+        content="Design custom socks and jerseys in real time using an interactive 3D configurator. Create, personalize, visualize, and order sportswear online with ease.">
     <meta name="twitter:title" content="GF Sports">
     <meta name="twitter:url" content="https://globe-fashion.com/">
-    <meta name="twitter:description" content="Design custom socks and jerseys in real time using an interactive 3D configurator. Create, personalize, visualize, and order sportswear online with ease.">
-    <meta name="twitter:image" content="../../images/og_image.jpg">
+    <meta name="twitter:description"
+        content="Design custom socks and jerseys in real time using an interactive 3D configurator. Create, personalize, visualize, and order sportswear online with ease.">
+    <meta name="twitter:image" content="../images/og_image.jpg">
     <meta name="twitter:card" content="summary">
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-J218ER51C4"></script>
     <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag() { dataLayer.push(arguments); }
-      gtag('js', new Date());
-      gtag('config', 'G-J218ER51C4');
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag('js', new Date());
+        gtag('config', 'G-J218ER51C4');
     </script>
-    <link rel="stylesheet" href="../../styles.css?v=2.0">
-    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-    
+
+    <!-- Preload Lottie player for faster loading animation -->
+    <link rel="modulepreload" href="https://unpkg.com/@lottiefiles/dotlottie-wc@latest/dist/dotlottie-wc.js">
+    <!-- Load Lottie player immediately (high priority) -->
+    <script type="module" src="https://unpkg.com/@lottiefiles/dotlottie-wc@latest/dist/dotlottie-wc.js"></script>
+
+    <link rel="stylesheet" href="../../styles.css">
+
     <!-- Import map for Three.js modules -->
     <script type="importmap">
-        {
-            "imports": {
-                "three": "https://cdn.jsdelivr.net/npm/three@0.181.2/build/three.module.js",
-                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.181.2/examples/jsm/"
-            }
-        }
-    </script>
-    
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.181.2/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.181.2/examples/jsm/"
+      }
+    }
+  </script>
+
     <!-- Fabric.js for SVG texture manipulation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
-</head>
-<body class="share-page">
-    <div id="root">
-        <header class="header-share">
-            <div class="header-content">
-                <div class="brand">
-                    <img class="brand-logo" src="../../images/jersey_logo.svg" alt="Jersey logo">
-                    <span class="brand-name">
-                        <a href="index.html" data-en style="text-decoration: none; color: black;">3D Jersey Configurator</a>
-                        <span data-fr style="display: none;">Configurateur de Maillot 3D</span>
-                    </span>
-                </div>
-            </div>
-        </header>
 
-        <main class="main-content">
-            <div class="viewer-section">
-                <div class="viewer-container">
-                    <!-- 3D Model will be loaded here -->
+    <!-- lil-gui for debug controls -->
+    <script src="https://cdn.jsdelivr.net/npm/lil-gui@0.19.2/dist/lil-gui.umd.min.js"></script>
+</head>
+
+<body class="share-page">
+    <header class="header-share">
+        <div class="header-content">
+            <div class="brand">
+                <img class="brand-logo" src="../../images/jersey_logo.svg" alt="Jersey logo">
+                <span class="brand-name">
+                    <a href="../../index.html" data-en style="text-decoration: none; color: black;">3D Jersey
+                        Configurator</a>
+                    <span data-fr style="display: none;">Configurateur de Maillot 3D</span>
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <div class="viewer-section">
+            <div class="viewer-container">
+                <!-- 3D Model will be integrated here later -->
+                <span class="viewer-placeholder"></span>
+            </div>
+            <!-- Canvas loading overlay with blur background -->
+            <div class="canvas-loading-overlay" id="canvas-loading-overlay">
+                <div class="canvas-loader-backdrop"></div>
+                <div class="canvas-loader-content">
+                    <dotlottie-wc src="https://lottie.host/b14b1f78-edab-449a-98b8-d65dff04fd4c/gRh1VWd2YQ.lottie"
+                        autoplay loop class="canvas-loader-lottie">
+                    </dotlottie-wc>
                 </div>
             </div>
-        </main>
+        </div>
+
+        <div class="customization-panel" style="display: none;">
+            <div class="panel-header">
+                <h1 class="panel-title">
+                    <span data-en>Customize Your Jersey</span>
+                    <span data-fr>Personnalisez Votre Maillot</span>
+                </h1>
+                <div class="save-button-group">
+                    <button class="save-button" id="main-save-button">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            <path d="M17 21v-8H7v8M7 3v5h8" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        <span class="save-text">
+                            <span data-en>Save</span>
+                            <span data-fr>Enregistrer</span>
+                        </span>
+                        <svg class="dropdown-arrow" id="dropdown-arrow" width="20" height="20" viewBox="0 0 24 24"
+                            fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                        </svg>
+                    </button>
+                    <div class="save-dropdown" style="display: none;">
+                        <button class="save-as-button dropdown-item">
+                            <span data-en>Save as</span>
+                            <span data-fr>Enregistrer sous</span>
+                        </button>
+                        <button class="new-design-button dropdown-item">
+                            <span data-en>New design</span>
+                            <span data-fr>Nouveau design</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="radio-group">
+                <div class="radio-options" id="jersey-tabs">
+                    <div class="radio-background"></div>
+                    <label class="radio-option">
+                        <input type="radio" name="jersey-tab" value="designs" checked>
+                        <span class="radio-content">
+                            <span data-en>Designs</span>
+                            <span data-fr>Designs</span>
+                        </span>
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="jersey-tab" value="colors">
+                        <span class="radio-content">
+                            <span data-en>Colors & Stripes</span>
+                            <span data-fr>Couleurs & Rayures</span>
+                        </span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="tab-content active" id="designs-tab">
+                <div class="design-family-name">
+                    <h2 class="panel-title" id="family-name">
+                        <span data-en>Select Design Family</span>
+                        <span data-fr>Sélectionner la Famille de Design</span>
+                    </h2>
+                    <button class="back-button-icon" id="back-button" style="display: none;">
+                        <img src="../../images/back_icon.svg" alt="Back">
+                    </button>
+                </div>
+
+                <!-- Color Selection (dynamically populated based on detected SVG colors) -->
+                <div class="color-selection-group" id="color-selection-group" style="display: none;">
+                    <!-- Color pickers will be generated dynamically by populateColorPickers() -->
+                </div>
+
+                <!-- Ribbed Collar Checkbox (appears after color-selection-group with line separator) -->
+                <div class="settings-group ribbed-collar-group" id="ribbed-collar-group-designs" style="display: none;">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="ribbed-collar-checkbox-designs" class="checkbox-input">
+                        <span class="checkbox-label">
+                            <span data-en>Ribbed Collar</span>
+                            <span data-fr>Col Côtelé</span>
+                        </span>
+                    </label>
+                </div>
+
+                <div class="design-thumbnails" id="design-thumbnails">
+                    <!-- Thumbnails will be dynamically loaded here -->
+                </div>
+
+                <!-- Design Customization Panel (hidden by default) -->
+                <div class="design-customization-panel" id="design-customization-panel" style="display: none;">
+                    <div class="jersey-settings has-background">
+                        <!-- WORKING DROPDOWN (temporary) -->
+                        <div class="has-input-select" style="margin-bottom: 0;">
+                            <label class="input-label">
+                                <span data-en>Select the part to upload an image</span>
+                                <span data-fr>Sélectionnez la partie à personnaliser</span>
+                            </label>
+                            <select class="select-input" id="jersey-part-select-working">
+                                <option value="front" data-en="Front" data-fr="Avant" selected>Front</option>
+                                <option value="back" data-en="Back" data-fr="Arrière">Back</option>
+                                <option value="right-sleeve" data-en="Right Sleeve" data-fr="Manche Droite">Right Sleeve
+                                </option>
+                                <option value="left-sleeve" data-en="Left Sleeve" data-fr="Manche Gauche">Left Sleeve
+                                </option>
+                                <!-- <option value="collar" data-en="Collar" data-fr="Col">Collar</option>
+                <option value="collar2" data-en="Collar 2" data-fr="Col 2">Collar 2</option>
+                <option value="hem" data-en="Hem" data-fr="Ourlet">Hem</option> -->
+                            </select>
+                        </div>
+
+                        <div class="settings-group">
+                            <label class="input-label">
+                                <span data-en>Custom Logo/ Number/ Name</span>
+                                <span data-fr>Logo/ Numéro/ Nom Personnalisé</span>
+                            </label>
+                            <div class="logo-upload">
+                                <input type="file" id="logo-upload" accept="image/png" class="hidden">
+                                <label for="logo-upload" class="logo-upload-area">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                                        xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"
+                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                            stroke-linejoin="round" />
+                                    </svg>
+                                    <span>
+                                        <span data-en>Drop PNG file here or click to upload</span>
+                                        <span data-fr>Déposez le fichier PNG ici ou cliquez pour télécharger</span>
+                                    </span>
+                                </label>
+                                <div id="upload-status" class="hidden"></div>
+                            </div>
+                        </div>
+
+                        <div class="settings-group scales">
+                            <div class="scale-group">
+                                <label class="input-label">
+                                    <span class="label-text">
+                                        <span data-en>Scale</span>
+                                        <span data-fr>Échelle</span>
+                                    </span>
+                                    <span class="range-value">1x</span>
+                                </label>
+                                <input type="range" class="range-input" min="0.1" max="2" value="1" step="0.1"
+                                    data-unit="x" id="logo-scale">
+                            </div>
+                            <div class="scale-group">
+                                <label class="input-label">
+                                    <span class="label-text">
+                                        <span data-en>Rotation</span>
+                                        <span data-fr>Rotation</span>
+                                    </span>
+                                    <span class="range-value">0°</span>
+                                </label>
+                                <input type="range" class="range-input" min="-90" max="90" value="0" step="1"
+                                    data-unit="°" id="logo-rotate">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-content" id="colors-tab">
+                <div class="jersey-settings">
+                    <!-- Ribbed Collar Checkbox -->
+                    <div class="settings-group">
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="ribbed-collar-checkbox-colors" class="checkbox-input">
+                            <span class="checkbox-label">
+                                <span data-en>Ribbed Collar</span>
+                                <span data-fr>Col Côtelé</span>
+                            </span>
+                        </label>
+                    </div>
+
+                    <!-- Part Selection and Color -->
+                    <div class="settings-group has-input-select">
+                        <div class="flex-row">
+                            <label class="input-label">
+                                <span data-en>Select the part to customise</span>
+                                <span data-fr>Sélectionnez la partie à personnaliser</span>
+                            </label>
+                            <div class="color-picker-row">
+                                <label class="input-label">
+                                    <span data-en>Color</span>
+                                    <span data-fr>Couleur</span>
+                                </label>
+                                <input type="color" id="jersey-part-color" class="color-picker-input" value="#ffffff">
+                            </div>
+                        </div>
+                        <select class="select-input" id="jersey-part-select-colors">
+                            <option value="front" data-en="Front" data-fr="Avant" selected>Front</option>
+                            <option value="back" data-en="Back" data-fr="Arrière">Back</option>
+                            <option value="right-sleeve" data-en="Right Sleeve" data-fr="Manche Droite">Right Sleeve
+                            </option>
+                            <option value="left-sleeve" data-en="Left Sleeve" data-fr="Manche Gauche">Left Sleeve
+                            </option>
+                            <option value="collar" data-en="Collar" data-fr="Col">Collar</option>
+                            <option value="collar2" data-en="Collar 2" data-fr="Col 2">Collar 2</option>
+                            <option value="hem" data-en="Hem" data-fr="Ourlet">Hem</option>
+                        </select>
+                    </div>
+
+
+                    <!-- Stripe Orientation -->
+                    <div class="radio-group">
+                        <h3 class="radio-group-title">
+                            <span data-en>Stripe Orientation</span>
+                            <span data-fr>Orientation des Rayures</span>
+                        </h3>
+                        <div class="radio-options" id="jersey-stripes-orientation">
+                            <div class="radio-background"></div>
+                            <label class="radio-option">
+                                <input type="radio" name="jersey-orientation" value="horizontal" checked>
+                                <span class="radio-content">
+                                    <svg class="icon" aria-hidden="true" focusable="false"
+                                        xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+                                        <path fill="currentColor"
+                                            d="m12.706 11.706 3 -3c0.391 -0.391 0.391 -1.025 0 -1.416l-3 -3c-0.391 -0.391 -1.025 -0.391 -1.416 0s-0.391 1.025 0 1.416l1.294 1.294H3.413l1.294 -1.294c0.391 -0.391 0.391 -1.025 0 -1.416s-1.025 -0.391 -1.416 0l-3 3c-0.391 0.391 -0.391 1.025 0 1.416l3 3c0.391 0.391 1.025 0.391 1.416 0s0.391 -1.025 0 -1.416L3.416 9h9.172l-1.294 1.294c-0.391 0.391 -0.391 1.025 0 1.416s1.025 0.391 1.416 0z" />
+                                    </svg>
+                                    <span data-en>Horizontal</span>
+                                    <span data-fr>Horizontale</span>
+                                </span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="jersey-orientation" value="vertical">
+                                <span class="radio-content">
+                                    <svg class="icon" aria-hidden="true" focusable="false"
+                                        xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16"
+                                        transform="rotate(90)">
+                                        <path fill="currentColor"
+                                            d="m12.706 11.706 3 -3c0.391 -0.391 0.391 -1.025 0 -1.416l-3 -3c-0.391 -0.391 -1.025 -0.391 -1.416 0s-0.391 1.025 0 1.416l1.294 1.294H3.413l1.294 -1.294c0.391 -0.391 0.391 -1.025 0 -1.416s-1.025 -0.391 -1.416 0l-3 3c-0.391 0.391 -0.391 1.025 0 1.416l3 3c0.391 0.391 1.025 0.391 1.416 0s0.391 -1.025 0 -1.416L3.416 9h9.172l-1.294 1.294c-0.391 0.391 -0.391 1.025 0 1.416s1.025 0.391 1.416 0z" />
+                                    </svg>
+                                    <span data-en>Vertical</span>
+                                    <span data-fr>Verticale</span>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Stripe Layer -->
+                    <div class="settings-group">
+                        <label class="input-label">
+                            <span data-en>Stripe Layer</span>
+                            <span data-fr>Couche à rayures</span>
+                        </label>
+                    </div>
+
+                    <!-- Stripe Layer Tabs -->
+                    <div class="no-tab-group">
+                        <div class="no-tab-container">
+                            <button class="no-tab no-active" data-tab="1">1</button>
+                            <button class="no-tab" data-tab="2">2</button>
+                            <button class="no-tab" data-tab="3">3</button>
+                            <button class="no-tab" data-tab="4">4</button>
+                        </div>
+
+                        <!-- Tab 1 Content -->
+                        <div data-tab="1" class="no-tab-content no-active">
+                            <div class="settings-group">
+                                <label class="checkbox-container">
+                                    <input type="checkbox" id="jersey-stripes-toggle-tab1" class="checkbox-input"
+                                        checked>
+                                    <span class="checkbox-label">
+                                        <span data-en>Enable Layer 1</span>
+                                        <span data-fr>Activer la couche 1</span>
+                                    </span>
+                                </label>
+                            </div>
+                            <div class="settings-group" data-stripe-setting="color">
+                                <div class="stripe-color-row">
+                                    <label class="input-label">
+                                        <span data-en>Stripe Color</span>
+                                        <span data-fr>Couleur des rayures</span>
+                                    </label>
+                                    <input type="color" id="jersey-stripes-color-tab1" class="color-picker-input"
+                                        value="#eaeef1">
+                                </div>
+                            </div>
+                            <div class="settings-group" data-stripe-setting="position">
+                                <label class="input-label">
+                                    <span class="label-text">
+                                        <span data-en>Stripe Position</span>
+                                        <span data-fr>Position des Rayures</span>
+                                    </span>
+                                    <span class="range-value">5</span>
+                                </label>
+                                <input type="range" class="range-input" min="0" max="20" value="5" step="0.1"
+                                    data-unit="" id="jersey-stripes-position-tab1">
+                            </div>
+                            <div class="settings-group" data-stripe-setting="gap">
+                                <label class="input-label">
+                                    <span class="label-text">
+                                        <span data-en>Gap Between Stripes</span>
+                                        <span data-fr>Espace Entre les Rayures</span>
+                                    </span>
+                                    <span class="range-value">10</span>
+                                </label>
+                                <input type="range" class="range-input" min="0" max="50" value="10" step="1"
+                                    data-unit="" id="jersey-stripes-gap-tab1">
+                            </div>
+                            <div class="settings-group" data-stripe-setting="thickness">
+                                <label class="input-label">
+                                    <span class="label-text">
+                                        <span data-en>Stripe Thickness</span>
+                                        <span data-fr>Épaisseur des Rayures</span>
+                                    </span>
+                                    <span class="range-value">10</span>
+                                </label>
+                                <input type="range" class="range-input" min="0.5" max="50" value="10" step="0.5"
+                                    data-unit="" id="jersey-stripes-thickness-tab1">
+                            </div>
+                            <div class="settings-group" data-stripe-setting="rotation">
+                                <label class="input-label">
+                                    <span class="label-text">
+                                        <span data-en>Rotation</span>
+                                        <span data-fr>Rotation</span>
+                                    </span>
+                                    <span class="range-value">0°</span>
+                                </label>
+                                <input type="range" class="range-input" min="-90" max="90" value="0" step="0.1"
+                                    data-unit="°" id="jersey-stripes-rotation-tab1">
+                            </div>
+                        </div>
+
+                        <!-- Tab 2 Content -->
+                        <div data-tab="2" class="no-tab-content">
+                            <div class="settings-group">
+                                <label class="checkbox-container">
+                                    <input type="checkbox" id="jersey-stripes-toggle-tab2" class="checkbox-input">
+                                    <span class="checkbox-label">
+                                        <span data-en>Enable Layer 2</span>
+                                        <span data-fr>Activer la couche 2</span>
+                                    </span>
+                                </label>
+                            </div>
+                            <div class="settings-group" data-stripe-setting="color">
+                                <div class="stripe-color-row">
+                                    <label class="input-label">
+                                        <span data-en>Stripe Color</span>
+                                        <span data-fr>Couleur des rayures</span>
+                                    </label>
+                                    <input type="color" id="jersey-stripes-color-tab2" class="color-picker-input"
+                                        value="#eaeef1">
+                                </div>
+                            </div>
+                            <div class="settings-group" data-stripe-setting="position">
+                                <label class="input-label">
+                                    <span class="label-text">
+                                        <span data-en>Stripe Position</span>
+                                        <span data-fr>Position des Rayures</span>
+                                    </span>
+                                    <span class="range-value">5</span>
+                                </label>
+                                <input type="range" class="range-input" min="0" max="20" value="5" step="0.1"
+                                    data-unit="" id="jersey-stripes-position-tab2">
+                            </div>
+                            <div class="settings-group" data-stripe-setting="gap">
+                                <label class="input-label">
+                                    <span class="label-text">
+                                        <span data-en>Gap Between Stripes</span>
+                                        <span data-fr>Espace Entre les Rayures</span>
+                                    </span>
+                                    <span class="range-value">10</span>
+                                </label>
+                                <input type="range" class="range-input" min="0" max="50" value="10" step="1"
+                                    data-unit="" id="jersey-stripes-gap-tab2">
+                            </div>
+                            <div class="settings-group" data-stripe-setting="thickness">
+                                <label class="input-label">
+                                    <span class="label-text">
+                                        <span data-en>Stripe Thickness</span>
+                                        <span data-fr>Épaisseur des Rayures</span>
+                                    </span>
+                                    <span class="range-value">10</span>
+                                </label>
+                                <input type="range" class="range-input" min="0.5" max="50" value="10" step="0.5"
+                                    data-unit="" id="jersey-stripes-thickness-tab2">
+                            </div>
+                            <div class="settings-group" data-stripe-setting="rotation">
+                                <label class="input-label">
+                                    <span class="label-text">
+                                        <span data-en>Rotation</span>
+                                        <span data-fr>Rotation</span>
+                                    </span>
+                                    <span class="range-value">0°</span>
+                                </label>
+                                <input type="range" class="range-input" min="-90" max="90" value="0" step="0.1"
+                                    data-unit="°" id="jersey-stripes-rotation-tab2">
+                            </div>
+                        </div>
+
+                        <!-- Tab 3 Content -->
+                        <div data-tab="3" class="no-tab-content">
+                            <div class="settings-group">
+                                <label class="checkbox-container">
+                                    <input type="checkbox" id="jersey-stripes-toggle-tab3" class="checkbox-input">
+                                    <span class="checkbox-label">
+                                        <span data-en>Enable Layer 3</span>
+                                        <span data-fr>Activer la couche 3</span>
+                                    </span>
+                                </label>
+                            </div>
+                            <div class="settings-group" data-stripe-setting="color">
+                                <div class="stripe-color-row">
+                                    <label class="input-label">
+                                        <span data-en>Stripe Color</span>
+                                        <span data-fr>Couleur des rayures</span>
+                                    </label>
+                                    <input type="color" id="jersey-stripes-color-tab3" class="color-picker-input"
+                                        value="#eaeef1">
+                                </div>
+                            </div>
+                            <div class="settings-group" data-stripe-setting="position">
+                                <label class="input-label">
+                                    <span class="label-text">
+                                        <span data-en>Stripe Position</span>
+                                        <span data-fr>Position des Rayures</span>
+                                    </span>
+                                    <span class="range-value">5</span>
+                                </label>
+                                <input type="range" class="range-input" min="0" max="20" value="5" step="0.1"
+                                    data-unit="" id="jersey-stripes-position-tab3">
+                            </div>
+                            <div class="settings-group" data-stripe-setting="gap">
+                                <label class="input-label">
+                                    <span class="label-text">
+                                        <span data-en>Gap Between Stripes</span>
+                                        <span data-fr>Espace Entre les Rayures</span>
+                                    </span>
+                                    <span class="range-value">10</span>
+                                </label>
+                                <input type="range" class="range-input" min="0" max="50" value="10" step="1"
+                                    data-unit="" id="jersey-stripes-gap-tab3">
+                            </div>
+                            <div class="settings-group" data-stripe-setting="thickness">
+                                <label class="input-label">
+                                    <span class="label-text">
+                                        <span data-en>Stripe Thickness</span>
+                                        <span data-fr>Épaisseur des Rayures</span>
+                                    </span>
+                                    <span class="range-value">10</span>
+                                </label>
+                                <input type="range" class="range-input" min="0.5" max="50" value="10" step="0.5"
+                                    data-unit="" id="jersey-stripes-thickness-tab3">
+                            </div>
+                            <div class="settings-group" data-stripe-setting="rotation">
+                                <label class="input-label">
+                                    <span class="label-text">
+                                        <span data-en>Rotation</span>
+                                        <span data-fr>Rotation</span>
+                                    </span>
+                                    <span class="range-value">0°</span>
+                                </label>
+                                <input type="range" class="range-input" min="-90" max="90" value="0" step="0.1"
+                                    data-unit="°" id="jersey-stripes-rotation-tab3">
+                            </div>
+                        </div>
+
+                        <!-- Tab 4 Content -->
+                        <div data-tab="4" class="no-tab-content">
+                            <div class="settings-group">
+                                <label class="checkbox-container">
+                                    <input type="checkbox" id="jersey-stripes-toggle-tab4" class="checkbox-input">
+                                    <span class="checkbox-label">
+                                        <span data-en>Enable Layer 4</span>
+                                        <span data-fr>Activer la couche 4</span>
+                                    </span>
+                                </label>
+                            </div>
+                            <div class="settings-group" data-stripe-setting="color">
+                                <div class="stripe-color-row">
+                                    <label class="input-label">
+                                        <span data-en>Stripe Color</span>
+                                        <span data-fr>Couleur des rayures</span>
+                                    </label>
+                                    <input type="color" id="jersey-stripes-color-tab4" class="color-picker-input"
+                                        value="#eaeef1">
+                                </div>
+                            </div>
+                            <div class="settings-group" data-stripe-setting="position">
+                                <label class="input-label">
+                                    <span class="label-text">
+                                        <span data-en>Stripe Position</span>
+                                        <span data-fr>Position des Rayures</span>
+                                    </span>
+                                    <span class="range-value">5</span>
+                                </label>
+                                <input type="range" class="range-input" min="0" max="20" value="5" step="0.1"
+                                    data-unit="" id="jersey-stripes-position-tab4">
+                            </div>
+                            <div class="settings-group" data-stripe-setting="gap">
+                                <label class="input-label">
+                                    <span class="label-text">
+                                        <span data-en>Gap Between Stripes</span>
+                                        <span data-fr>Espace Entre les Rayures</span>
+                                    </span>
+                                    <span class="range-value">10</span>
+                                </label>
+                                <input type="range" class="range-input" min="0" max="50" value="10" step="1"
+                                    data-unit="" id="jersey-stripes-gap-tab4">
+                            </div>
+                            <div class="settings-group" data-stripe-setting="thickness">
+                                <label class="input-label">
+                                    <span class="label-text">
+                                        <span data-en>Stripe Thickness</span>
+                                        <span data-fr>Épaisseur des Rayures</span>
+                                    </span>
+                                    <span class="range-value">10</span>
+                                </label>
+                                <input type="range" class="range-input" min="0.5" max="50" value="10" step="0.5"
+                                    data-unit="" id="jersey-stripes-thickness-tab4">
+                            </div>
+                            <div class="settings-group" data-stripe-setting="rotation">
+                                <label class="input-label">
+                                    <span class="label-text">
+                                        <span data-en>Rotation</span>
+                                        <span data-fr>Rotation</span>
+                                    </span>
+                                    <span class="range-value">0°</span>
+                                </label>
+                                <input type="range" class="range-input" min="-90" max="90" value="0" step="0.1"
+                                    data-unit="°" id="jersey-stripes-rotation-tab4">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Custom Logo/Number/Name Section -->
+                    <div class="settings-group">
+                        <label class="input-label">
+                            <span data-en>Custom Logo/ Number/ Name</span>
+                            <span data-fr>Logo/ Numéro/ Nom Personnalisé</span>
+                        </label>
+                        <div class="logo-upload">
+                            <input type="file" id="logo-upload-colors" accept="image/png" class="hidden">
+                            <label for="logo-upload-colors" class="logo-upload-area">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                                    xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"
+                                        stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                        stroke-linejoin="round" />
+                                </svg>
+                                <span>
+                                    <span data-en>Drop PNG file here or click to upload</span>
+                                    <span data-fr>Déposez le fichier PNG ici ou cliquez pour télécharger</span>
+                                </span>
+                            </label>
+                            <div id="upload-status-colors" class="hidden"></div>
+                        </div>
+                    </div>
+
+                    <!-- Scale and Rotation -->
+                    <div class="settings-group scales">
+                        <div class="scale-group">
+                            <label class="input-label">
+                                <span class="label-text">
+                                    <span data-en>Scale</span>
+                                    <span data-fr>Échelle</span>
+                                </span>
+                                <span class="range-value">1x</span>
+                            </label>
+                            <input type="range" class="range-input" min="0.1" max="2" value="1" step="0.1" data-unit="x"
+                                id="logo-scale-colors">
+                        </div>
+                        <div class="scale-group">
+                            <label class="input-label">
+                                <span class="label-text">
+                                    <span data-en>Rotation</span>
+                                    <span data-fr>Rotation</span>
+                                </span>
+                                <span class="range-value">0°</span>
+                            </label>
+                            <input type="range" class="range-input" min="-90" max="90" value="0" step="1" data-unit="°"
+                                id="logo-rotate-colors">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Login -->
+    <div class="user-dropdown" style="display: none;">
+        <button class="dropdown-item" id="login-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M13.8 12H3" stroke="currentColor"
+                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span data-en>Log in</span>
+            <span data-fr>Se connecter</span>
+        </button>
+        <button class="dropdown-item" id="create-account-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M13.3,17.5v-1.7
+            c0-1.8-1.5-3.3-3.3-3.3H5c-1.8,0-3.3,1.5-3.3,3.3v1.7 M8,9.2c1.8,0,3.3-1.5,3.3-3.3S9.8,2.5,8,2.5S4.7,4,4.7,5.8S6.2,9.2,8,9.2z
+             M16.7,6.7v5 M14.2,9.2h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round" />
+            </svg>
+            <span data-en>Create Account</span>
+            <span data-fr>Créer un Compte</span>
+        </button>
+    </div>
+    <div class="modal-overlay" id="login-modal" style="display: none;">
+        <div class="modal">
+            <div class="modal-content">
+                <h2 class="modal-title">
+                    <span data-en>Log in</span>
+                    <span data-fr>Se connecter</span>
+                </h2>
+                <form class="login-form">
+                    <div class="form-group">
+                        <label for="email">
+                            <span data-en>Email</span>
+                            <span data-fr>E-mail</span>
+                        </label>
+                        <input type="email" id="email" placeholder="Enter your email"
+                            data-en-placeholder="Enter your email" data-fr-placeholder="Entrez votre e-mail" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">
+                            <span data-en>Password</span>
+                            <span data-fr>Mot de passe</span>
+                        </label>
+                        <input type="password" id="password" placeholder="Enter your password"
+                            data-en-placeholder="Enter your password" data-fr-placeholder="Entrez votre mot de passe"
+                            required>
+                    </div>
+                    <button type="submit" class="login-button">
+                        <span data-en>Log in</span>
+                        <span data-fr>Se connecter</span>
+                    </button>
+                    <div class="form-footer">
+                        <a href="#" class="text-link">
+                            <span data-en>Don't have an account?</span>
+                            <span data-fr>Vous n'avez pas de compte ?</span>
+                        </a>
+                        <a href="#" class="text-link">
+                            <span data-en>Forgot Password?</span>
+                            <span data-fr>Mot de passe oublié ?</span>
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <!-- create account -->
+    <div class="modal-overlay" id="create-account-modal" style="display: none;">
+        <div class="modal">
+            <div class="modal-content">
+                <h2 class="modal-title">
+                    <span data-en>Create Account</span>
+                    <span data-fr>Créer un Compte</span>
+                </h2>
+                <form class="create-account-form">
+                    <div class="name-row">
+                        <div class="form-group">
+                            <label for="firstName">
+                                <span data-en>First Name</span>
+                                <span data-fr>Prénom</span>
+                            </label>
+                            <input type="text" id="firstName" placeholder="First name" data-en-placeholder="First name"
+                                data-fr-placeholder="Prénom" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="lastName">
+                                <span data-en>Last Name</span>
+                                <span data-fr>Nom</span>
+                            </label>
+                            <input type="text" id="lastName" placeholder="Last name" data-en-placeholder="Last name"
+                                data-fr-placeholder="Nom" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="phoneNumber">
+                            <span data-en>Phone Number</span>
+                            <span data-fr>Numéro de téléphone</span>
+                        </label>
+                        <input type="tel" id="phoneNumber" placeholder="Enter your phone number"
+                            data-en-placeholder="Enter your phone number"
+                            data-fr-placeholder="Entrez votre numéro de téléphone" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="clubName">
+                            <span data-en>Club Name</span>
+                            <span data-fr>Nom du club</span>
+                        </label>
+                        <input type="text" id="clubName" placeholder="Enter your club name"
+                            data-en-placeholder="Enter your club name" data-fr-placeholder="Entrez le nom de votre club"
+                            required>
+                    </div>
+                    <div class="form-group">
+                        <label for="signupEmail">
+                            <span data-en>Email</span>
+                            <span data-fr>E-mail</span>
+                        </label>
+                        <input type="email" id="signupEmail" placeholder="Enter your email"
+                            data-en-placeholder="Enter your email" data-fr-placeholder="Entrez votre e-mail" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="signupPassword">
+                            <span data-en>Password</span>
+                            <span data-fr>Mot de passe</span>
+                        </label>
+                        <input type="password" id="signupPassword" placeholder="Create password"
+                            data-en-placeholder="Create password" data-fr-placeholder="Créez un mot de passe" required>
+                    </div>
+                    <button type="submit" class="login-button">
+                        <span data-en>Sign up</span>
+                        <span data-fr>S'inscrire</span>
+                    </button>
+                    <div class="form-footer">
+                        <span>
+                            <span data-en>Already have an account?</span>
+                            <span data-fr>Vous avez déjà un compte ?</span>
+                            <a href="#" class="text-link" id="switch-to-login">
+                                <span data-en>Log in</span>
+                                <span data-fr>Se connecter</span>
+                            </a>
+                        </span>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <!-- forgot password -->
+    <div class="modal-overlay" id="forgot-password-modal" style="display: none;">
+        <div class="modal">
+            <div class="modal-content">
+                <h2 class="modal-title">
+                    <span data-en>Forgot your password?</span>
+                    <span data-fr>Mot de passe oublié ?</span>
+                </h2>
+                <form class="forgot-password-form">
+                    <div id="forgot-password-stage-1">
+                        <p class="forgot-password-text">
+                            <span data-en>Type in the email associated with your account and we'll send you a link to
+                                reset your password.</span>
+                            <span data-fr>Saisissez l'e-mail associé à votre compte et nous vous enverrons un lien pour
+                                réinitialiser votre mot de passe.</span>
+                        </p>
+                        <div class="form-group">
+                            <label for="forgotPasswordEmail">
+                                <span data-en>Email</span>
+                                <span data-fr>E-mail</span>
+                            </label>
+                            <input type="email" id="forgotPasswordEmail" placeholder="Enter your email"
+                                data-en-placeholder="Enter your email" data-fr-placeholder="Entrez votre adresse e-mail"
+                                required>
+                        </div>
+                        <button type="submit" class="submit-button">
+                            <span data-en>Send Email</span>
+                            <span data-fr>Envoyer l'e-mail</span>
+                        </button>
+                    </div>
+                    <div id="forgot-password-stage-2" style="display: none;">
+                        <p class="forgot-password-text">
+                            <span data-en>An email has been sent to your address. Please check your inbox including spam
+                                and follow the instructions to reset your password.</span>
+                            <span data-fr>Un e-mail a été envoyé à votre adresse. Veuillez vérifier votre boîte de
+                                réception, y compris les spams, et suivre les instructions pour réinitialiser votre mot
+                                de passe.</span>
+                        </p>
+                        <button type="button" class="submit-button" id="backToLoginBtn">
+                            <span data-en>Back to Login</span>
+                            <span data-fr>Retour à la connexion</span>
+                        </button>
+                    </div>
+                    <div class="form-footer">
+                        <a href="#" class="text-link" id="backToLoginLink">
+                            <span data-en>Back to Login</span>
+                            <span data-fr>Retour à la connexion</span>
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 
-    <script type="module" src="https://unpkg.com/@lottiefiles/dotlottie-wc@latest/dist/dotlottie-wc.js"></script>
-    <script type="module">
-        // Import and initialize the 3D viewer
-        import { JerseyViewer } from '../threeD-script.js';
-        
-        // Initialize viewer for share page
-        window.jerseyViewer = new JerseyViewer('.viewer-container');
-    </script>
-    <script type="module" src="script.js"></script>
-</body>
-</html>
+    <!-- Save Design Modal -->
+    <div class="design-save-modal" style="display: none;">
+        <div class="design-save-overlay"></div>
+        <div class="design-save-content">
+            <h2 class="design-save-title">
+                <span data-en>Save Your Design</span>
+                <span data-fr>Enregistrer votre design</span>
+            </h2>
+            <div class="design-save-preview-container">
+                <div class="design-save-preview" id="design-save-preview">
+                </div>
+            </div>
+            <div class="design-save-input">
+                <label for="newDesignName">
+                    <span data-en>Design Name</span>
+                    <span data-fr>Nom du design</span>
+                </label>
+                <input type="text" id="newDesignName" placeholder="Enter a name for your design"
+                    data-en-placeholder="Enter a name for your design"
+                    data-fr-placeholder="Entrez un nom pour votre design" maxlength="30" />
+                <div id="save-feedback" style="display: none;"></div>
+                <div class="design-save-char-count">0 / 30</div>
+            </div>
+            <div class="design-save-actions">
+                <button class="design-save-confirm-btn" id="design-save-confirm-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        <path d="M17 21v-8H7v8M7 3v5h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                            stroke-linejoin="round" />
+                    </svg>
+                    <span data-en>Save Design</span>
+                    <span data-fr>Enregistrer le design</span>
+                </button>
+                <button class="design-save-cancel-btn">
+                    <span data-en>Cancel</span>
+                    <span data-fr>Annuler</span>
+                </button>
+            </div>
+        </div>
+    </div>
 
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="../auth.js"></script>
+    <script src="../script.js"></script>
+    <script src="script.js"></script>
+    <script type="module" src="../threeD-script.js"></script>
+
+    <!-- Fabric.js canvases for texture generation (one per jersey part) -->
+    <!-- In debug mode, the active canvas will be visible in the bottom-right corner -->
+    <canvas id="fabric-canvas-front" data-debug="false"></canvas>
+    <canvas id="fabric-canvas-back" data-debug="false"></canvas>
+    <canvas id="fabric-canvas-right-sleeve" data-debug="false"></canvas>
+    <canvas id="fabric-canvas-left-sleeve" data-debug="false"></canvas>
+    <canvas id="fabric-canvas-collar" data-debug="false"></canvas>
+    <canvas id="fabric-canvas-collar2" data-debug="false"></canvas>
+    <canvas id="fabric-canvas-hem" data-debug="false"></canvas>
+
+</body>
+
+</html>

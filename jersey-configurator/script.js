@@ -231,8 +231,40 @@ async function requireLoginGuard(evt, el) {
 }
 
 function markDesignDirty() {
+  // Don't mark as dirty if we're currently loading a configuration
+  if (isLoadingConfig) {
+    return;
+  }
+  
+  // Check localStorage for loading state (persists across navigation)
+  const loadingState = localStorage.getItem('jerseyDesignLoading');
+  if (loadingState) {
+    try {
+      const { timestamp, designId } = JSON.parse(loadingState);
+      const now = Date.now();
+      const timeSinceLoad = now - timestamp;
+      
+      // If we're within 10 seconds of loading and it's the same design, don't mark dirty
+      // This handles async operations and navigation timing issues
+      if (timeSinceLoad < 10000) {
+        // Also check if current design matches (if we have a design ID)
+        if (!designId || currentDesignId === designId || !currentDesignId) {
+          return;
+        }
+      } else {
+        // Loading state is old, remove it
+        localStorage.removeItem('jerseyDesignLoading');
+      }
+    } catch (e) {
+      // Invalid data, remove it
+      localStorage.removeItem('jerseyDesignLoading');
+    }
+  }
+  
+  // This is a real user change - mark as dirty and clear any loading flags
   designDirty = true;
   window.designDirty = true;
+  localStorage.removeItem('jerseyDesignLoading'); // Clear loading flag on actual user change
 }
 
 function setDesignClean() {
@@ -304,6 +336,7 @@ const designCustomizationPanel = document.getElementById('design-customization-p
 let currentFamily = null;
 let currentDesign = null;
 let designDirty = false; // tracks unsaved edits
+let isLoadingConfig = false; // prevents marking dirty during config loading
 window.designDirty = designDirty;
 
 
@@ -333,6 +366,175 @@ function getSupabaseClient() {
 
   return null;
 }
+
+// ==================== DOWNLOAD FUNCTIONALITY ====================
+// Function to download JSON
+function downloadDesignJSON(data, filename) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const link = document.createElement("a");
+  if (link.download !== undefined) {
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+}
+
+function getShortCodeFromUrl() {
+  const urlParams = new URLSearchParams(window.location.search);
+  return urlParams.get('shortCode');
+}
+
+async function fetchDesignData(shortCode) {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    console.error('Supabase client not available');
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from('user_files')
+    .select('design_name, custom_name, design_metadata, short_code, id')
+    .eq('short_code', shortCode)
+    .single();
+
+  if (error) {
+    console.error('Error fetching design data:', error);
+    return null;
+  }
+
+  return data;
+}
+
+// Function to handle the download
+// ==================== ZIP DOWNLOAD HELPERS ====================
+// Helper function to fetch image as blob
+async function fetchImageAsBlob(url) {
+  try {
+    const response = await fetch(url, { mode: 'cors' });
+    if (!response.ok) {
+      console.warn(`Failed to fetch image: ${url}`);
+      return null;
+    }
+    return await response.blob();
+  } catch (error) {
+    console.warn(`Error fetching image ${url}:`, error);
+    return null;
+  }
+}
+
+// Helper function to download zip file
+function downloadZip(blob, filename) {
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  link.setAttribute("href", url);
+  link.setAttribute("download", filename);
+  link.style.visibility = "hidden";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+// Modified handleDownload to create zip with JSON + logos
+async function handleDownload() {
+  try {
+    const shortCode = getShortCodeFromUrl();
+    let metadata;
+    let zipFilename;
+
+    if (shortCode) {
+      // Case 1: Existing design - fetch from database
+      console.log(`Loading design from database with shortCode: ${shortCode}`);
+      const data = await fetchDesignData(shortCode);
+
+      if (!data || !data.design_metadata) {
+        console.log("No design metadata found for the given short code");
+        return;
+      }
+
+      metadata = data.design_metadata;
+      zipFilename = `jersey_design_${shortCode}.zip`;
+    } else {
+      // Case 2: New design - capture current state from UI
+      console.log("No shortCode found - capturing current design state from UI");
+      metadata = getJerseyConfiguration();
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+      zipFilename = `jersey_design_new_${timestamp}.zip`;
+    }
+
+    console.log("Creating zip package with JSON and logos...");
+
+    // Create zip file
+    const zip = new JSZip();
+
+    // Add JSON configuration
+    zip.file("config.json", JSON.stringify(metadata, null, 2));
+    console.log("✓ Added config.json");
+
+    // Add logo images
+    const logosFolder = zip.folder("logos");
+    const logoPromises = [];
+
+    if (metadata.logos) {
+      for (const [partName, logos] of Object.entries(metadata.logos)) {
+        if (Array.isArray(logos) && logos.length > 0) {
+          logos.forEach((logo, index) => {
+            if (logo.url) {
+              const promise = fetchImageAsBlob(logo.url).then(blob => {
+                if (blob) {
+                  const filename = `${partName}_logo_${index + 1}.png`;
+                  logosFolder.file(filename, blob);
+                  console.log(`✓ Added logo: ${filename}`);
+                }
+              });
+              logoPromises.push(promise);
+            }
+          });
+        }
+      }
+    }
+
+    // Wait for all logos to be fetched
+    await Promise.all(logoPromises);
+
+    // Generate and download zip
+    console.log("Generating zip file...");
+    const zipBlob = await zip.generateAsync({ type: "blob" });
+    downloadZip(zipBlob, zipFilename);
+    console.log("✅ Zip file downloaded successfully");
+
+  } catch (error) {
+    console.error("Error downloading design package:", error);
+  }
+}
+
+// Event listener for download button
+document.addEventListener("DOMContentLoaded", () => {
+  const downloadButton = document.getElementById("download-button");
+
+  if (downloadButton) {
+    downloadButton.addEventListener("click", handleDownload);
+  }
+
+  // Screenshot button functionality
+  const screenshotButton = document.getElementById('screenshot-button');
+  if (screenshotButton) {
+    screenshotButton.addEventListener('click', () => {
+      // Call the globally exposed function from threeD-script.js
+      if (typeof window.takeCurrentViewScreenshot === 'function') {
+        window.takeCurrentViewScreenshot();
+      } else {
+        console.error('Screenshot function not available yet');
+      }
+    });
+  }
+});
+
 
 // Design configuration - loaded from design-config.json
 // Simple format: just specifies display order, paths are derived from folder names
@@ -364,19 +566,29 @@ function normalizeTypeValue(value, fallback) {
   return v || fallback;
 }
 
+// Helper function to get the correct base path based on current page location
+function getBasePath() {
+  const currentPath = window.location.pathname;
+  const isInSubfolder = currentPath.includes('/admin-design/') || currentPath.includes('/share/');
+  return isInSubfolder ? '../../' : '../';
+}
+
 // Path helpers for the folder structure
 function getFamilyThumbnailPath(familyId, collar, shoulder) {
   // Family thumbnails are per model type (collar + shoulder)
-  // Example: ../designs/design_family/graphic/insert_reglan_graphic_thumb.webp
-  return `../designs/design_family/${familyId}/${collar}_${shoulder}_${familyId}_thumb.webp`;
+  const basePath = typeof getBasePath === 'function' ? getBasePath() : '../';
+  return `${basePath}designs/design_family/${familyId}/${collar}_${shoulder}_${familyId}_thumb.webp`;
 }
 
 function getDesignIconPath(familyId, designId, collar, shoulder) {
-  return `../designs/icons/${familyId}/${designId}/${collar}_${shoulder}_${designId}_thumb.webp`;
+  const basePath = typeof getBasePath === 'function' ? getBasePath() : '../';
+  return `${basePath}designs/icons/${familyId}/${designId}/${collar}_${shoulder}_${designId}_thumb.webp`;
 }
 
 function getDesignSvgPath(familyId, designId, collar, shoulder) {
-  return `../designs/svg/${familyId}/${designId}/${collar}_${shoulder}_${designId}.svg`;
+  // Use getBasePath() if available (from threeD-script.js), otherwise fallback to '../'
+  const basePath = typeof getBasePath === 'function' ? getBasePath() : '../';
+  return `${basePath}designs/svg/${familyId}/${designId}/${collar}_${shoulder}_${designId}.svg`;
 }
 
 function getDesignIdFromSvgPath(svgPath) {
@@ -393,7 +605,10 @@ function getDesignIdFromSvgPath(svgPath) {
 // Load design configuration from JSON file
 async function loadDesignConfig() {
   try {
-    const response = await fetch('./design-config.json');
+    // Use getBasePath() to resolve path correctly from both main page and share subdirectory
+    const basePath = typeof getBasePath === 'function' ? getBasePath() : './';
+    const configPath = basePath === './' ? './design-config.json' : `${basePath}jersey-configurator/design-config.json`;
+    const response = await fetch(configPath);
     if (!response.ok) {
       throw new Error(`Failed to load design-config.json: ${response.status} ${response.statusText}`);
     }
@@ -451,10 +666,11 @@ function loadDesignFamilies() {
     img.src = thumbnailPath;
     img.alt = displayName;
     img.onerror = function () {
-      // Fallback to legacy single thumbnail (if present): ../designs/{familyId}.webp
+      // Fallback to legacy single thumbnail (if present): {basePath}designs/{familyId}.webp
       if (!img.dataset.fallbackTried) {
         img.dataset.fallbackTried = '1';
-        img.src = `../designs/${familyId}.webp`;
+        const basePath = getBasePath();
+        img.src = `${basePath}designs/${familyId}.webp`;
         return;
       }
 
@@ -535,7 +751,7 @@ function loadFamilyDesigns(familyId) {
 
   // Get current collar and shoulder from URL parameters
   const { collar, shoulder } = getCurrentCollarAndShoulder();
-  
+
   // Get designs for this family from config
   const familyDesigns = designOrder[familyId] || [];
   console.log(`Loading ${familyDesigns.length} design(s) from ${toDisplayName(familyId)} for: ${collar}_${shoulder}`);
@@ -747,8 +963,8 @@ backButton.addEventListener('click', () => {
     const ribbedCollarGroup = document.getElementById('ribbed-collar-group-designs');
     if (ribbedCollarGroup) ribbedCollarGroup.style.display = 'none';
 
-      // Design was manually selected, show thumbnails
-      designThumbnails.style.display = 'grid';
+    // Design was manually selected, show thumbnails
+    designThumbnails.style.display = 'grid';
   } else {
     // If showing designs, go back to families
     loadDesignFamilies();
@@ -1437,10 +1653,12 @@ function detectUniqueColors(svgElement) {
       return classInfo;
     });
 
-  // Sort by dominance (highest first)
-  classArray.sort((a, b) => b.dominance - a.dominance);
+  // Sort alphabetically by className for consistent ordering across pages
+  // This ensures colors are always mapped the same way
+  classArray.sort((a, b) => a.className.localeCompare(b.className));
 
-  debugLog('Detected SVG classes by dominance:', classArray);
+  console.log('✅ Detected SVG classes (alphabetically sorted):', classArray.map(c => c.className));
+  debugLog('Detected SVG classes by className:', classArray);
 
   return classArray;
 }
@@ -1602,6 +1820,9 @@ function updateSVGColorByClass(className, newColor) {
   }
 }
 
+// Make function available globally for use in share page
+window.updateSVGColorByClass = updateSVGColorByClass;
+
 /**
  * Captures the current design colors from the color pickers
  * @returns {Array<string>} Array of hex color strings (e.g., ["#FFD700", "#2698D1"])
@@ -1626,25 +1847,30 @@ function captureCurrentDesignColors() {
  * @param {Array<string>} designColors - Array of hex color strings
  */
 function restoreDesignColors(designColors) {
+  console.log('🎨 restoreDesignColors() called with:', designColors);
   debugLog('🎨 restoreDesignColors() called with:', designColors);
 
   if (!designColors || designColors.length === 0) {
+    console.warn('⚠️ No design colors to restore (empty or null)');
     debugLog('⚠️ No design colors to restore (empty or null)');
     debugLog('No design colors to restore');
     return;
   }
 
   if (!window.currentSVGClassMap) {
+    console.warn('⚠️ No SVG class map available, cannot restore colors');
     debugLog('⚠️ No SVG class map available, cannot restore colors');
     debugLog('⚠️ No SVG class map available, cannot restore colors');
     return;
   }
 
+  console.log(`🎨 Restoring ${designColors.length} design colors...`);
   debugLog(`🎨 Restoring ${designColors.length} design colors...`);
   debugLog(`🎨 Restoring ${designColors.length} design colors...`);
 
   // Get all color pickers in order
   const colorPickers = document.querySelectorAll('#color-selection-group .color-picker-input');
+  console.log(`🔍 Found ${colorPickers.length} color pickers to update`);
   debugLog(`🔍 Found ${colorPickers.length} color pickers to update`);
 
   // Apply each saved color
@@ -1653,6 +1879,7 @@ function restoreDesignColors(designColors) {
       const savedColor = designColors[index];
       const className = picker.dataset.className;
 
+      console.log(`  🎨 Restoring color ${index + 1}: ${savedColor} to class ${className}`);
       debugLog(`  Restoring color ${index}: ${savedColor} to class ${className}`);
 
       if (className && savedColor) {
@@ -2760,6 +2987,21 @@ function hideConfigLoading() {
 function loadJerseyConfiguration(isSavedDesign) {
   const savedConfig = isSavedDesign ? localStorage.getItem('jerseyConfig') : null;
 
+  // When loading a saved design, mark it as clean (no unsaved changes)
+  // and set flag to prevent programmatic changes from marking it dirty
+  if (isSavedDesign) {
+    setDesignClean();
+    isLoadingConfig = true; // Prevent marking dirty during loading
+    
+    // Store loading state in localStorage (persists across navigation)
+    // This helps handle timing issues with async operations
+    const loadingState = {
+      timestamp: Date.now(),
+      designId: currentDesignId || null
+    };
+    localStorage.setItem('jerseyDesignLoading', JSON.stringify(loadingState));
+  }
+
   if (savedConfig) {
     const config = JSON.parse(savedConfig);
 
@@ -2847,82 +3089,128 @@ function loadJerseyConfiguration(isSavedDesign) {
       if (config.design.familyId && config.design.svgPath) {
         // With simplified config, just use the familyId directly
         currentFamily = config.design.familyId;
+
+        // Recalculate the SVG path to ensure correct depth for current page location
+        // Extract design ID from the saved path
+        const designId = getDesignIdFromSvgPath(config.design.svgPath);
+        if (designId && config.collar && config.shoulder) {
+          // Recalculate path with correct depth
+          currentDesign = getDesignSvgPath(config.design.familyId, designId, config.collar, config.shoulder);
+          debugLog(`📐 Recalculated SVG path: ${currentDesign} (was: ${config.design.svgPath})`);
+        } else {
+          // Fallback to saved path if we can't recalculate
           currentDesign = config.design.svgPath;
+          debugLog(`⚠️ Using saved SVG path: ${currentDesign}`);
+        }
 
-          // Load the family designs and show customization panel
-          setTimeout(() => {
+        // Load the family designs and show customization panel
+        setTimeout(() => {
           loadFamilyDesigns(config.design.familyId);
-            setTimeout(async () => {
-              // Update header to "Family - Design"
-              const restoredDesignId = getDesignIdFromSvgPath(config.design.svgPath);
-              if (restoredDesignId) {
-                familyName.textContent = `${toDisplayName(config.design.familyId)} - ${toDisplayName(restoredDesignId)}`;
-              }
+          setTimeout(async () => {
+            // Update header to "Family - Design"
+            const restoredDesignId = getDesignIdFromSvgPath(config.design.svgPath);
+            if (restoredDesignId) {
+              familyName.textContent = `${toDisplayName(config.design.familyId)} - ${toDisplayName(restoredDesignId)}`;
+            }
 
-              // Check if we have saved design colors
-              const hasSavedColors = config.design.designColors && config.design.designColors.length > 0;
+            // Check if we have saved design colors
+            const hasSavedColors = config.design.designColors && config.design.designColors.length > 0;
 
-              // Always fetch SVG to get class names
-              debugLog('🔍 Fetching SVG...');
-              try {
-                const response = await fetch(config.design.svgPath);
-                const svgText = await response.text();
-                const detectedColors = detectUniqueColors(svgText);
+            // Always fetch SVG to get class names (use recalculated path)
+            debugLog('🔍 Fetching SVG...');
+            try {
+              const response = await fetch(currentDesign);
+              const svgText = await response.text();
+              const detectedColors = detectUniqueColors(svgText);
 
-                if (hasSavedColors) {
-                  // Use saved colors with detected class names
-                  debugLog('📦 Mapping saved colors to detected classes');
-                  window.currentSVGColors = detectedColors.map((item, index) => ({
-                    className: item.className,
-                    color: config.design.designColors[index] || item.color
-                  }));
-                  debugLog('✅ Mapped colors:', window.currentSVGColors);
-                } else {
-                  // Use detected colors
-                  debugLog('🔍 Using detected colors');
-                  window.currentSVGColors = detectedColors;
-                }
-                debugLog('✅ SVG processing complete, currentSVGColors set');
-              } catch (error) {
-                console.error('Error loading SVG:', error);
-                window.currentSVGColors = [];
-              }
-
-              debugLog('📋 About to call showDesignCustomization()');
-
-              // Set up event listener BEFORE calling showDesignCustomization
               if (hasSavedColors) {
-                debugLog('🔧 Setting up colorPickersReady listener');
-                const colorRestoreHandler = () => {
-                  // Wait for SVG to load before restoring colors
-                  setTimeout(() => {
-                    debugLog('🔄 Applying saved colors to SVG...');
-                    restoreDesignColors(config.design.designColors);
-                  }, 1000); // Wait for SVG to load into hidden container (1s for slower machines)
-                  window.removeEventListener('colorPickersReady', colorRestoreHandler);
-                };
-                window.addEventListener('colorPickersReady', colorRestoreHandler);
+                // Use saved colors with detected class names
+                debugLog('📦 Mapping saved colors to detected classes');
+                window.currentSVGColors = detectedColors.map((item, index) => ({
+                  className: item.className,
+                  color: config.design.designColors[index] || item.color
+                }));
+                debugLog('✅ Mapped colors:', window.currentSVGColors);
+              } else {
+                // Use detected colors
+                debugLog('🔍 Using detected colors');
+                window.currentSVGColors = detectedColors;
               }
+              debugLog('✅ SVG processing complete, currentSVGColors set');
+            } catch (error) {
+              console.error('Error loading SVG:', error);
+              window.currentSVGColors = [];
+            }
 
-              showDesignCustomization();
-              debugLog('✅ showDesignCustomization() completed');
+            debugLog('📋 About to call showDesignCustomization()');
 
-              // Dispatch the designSelected event to load the SVG on the 3D model
-              const designSelectedEvent = new CustomEvent('designSelected', {
-                detail: { svgPath: config.design.svgPath }
-              });
-              window.dispatchEvent(designSelectedEvent);
-
-              // Load the 3D configuration (for logos and other settings)
-              setTimeout(() => {
-                loadJustThe3DConfig(config);
-                // Hide canvas loader after all async operations complete
+            // Set up event listener BEFORE calling showDesignCustomization
+            if (hasSavedColors) {
+              debugLog('🔧 Setting up colorPickersReady listener');
+              const colorRestoreHandler = () => {
+                // Wait for SVG to load before restoring colors
                 setTimeout(() => {
-                  if (window.hideCanvasLoader) window.hideCanvasLoader();
-                }, 800);
-              }, 200);
-            }, 100);
+                  debugLog('🔄 Applying saved colors to SVG...');
+                  restoreDesignColors(config.design.designColors);
+                  // After colors are restored, mark clean and re-enable dirty tracking
+                  // This happens after restoreDesignColors completes (which sets color picker values)
+                  if (isSavedDesign) {
+                    setDesignClean();
+                    isLoadingConfig = false; // Re-enable dirty tracking after color restoration
+                    // Remove loading state from localStorage after a delay
+                    // This gives time for any delayed events to complete
+                    setTimeout(() => {
+                      localStorage.removeItem('jerseyDesignLoading');
+                    }, 2000);
+                  }
+                }, 1000); // Wait for SVG to load into hidden container (1s for slower machines)
+                window.removeEventListener('colorPickersReady', colorRestoreHandler);
+              };
+              window.addEventListener('colorPickersReady', colorRestoreHandler);
+            } else {
+              // If no saved colors, we can reset the flag earlier
+              // But still wait a bit to ensure all operations complete
+              setTimeout(() => {
+                if (isSavedDesign) {
+                  setDesignClean();
+                  isLoadingConfig = false;
+                  // Remove loading state from localStorage after a delay
+                  // This gives time for any delayed events to complete
+                  setTimeout(() => {
+                    localStorage.removeItem('jerseyDesignLoading');
+                  }, 2000);
+                }
+              }, 500);
+            }
+
+            showDesignCustomization();
+            debugLog('✅ showDesignCustomization() completed');
+
+            // Dispatch the designSelected event to load the SVG on the 3D model (use recalculated path)
+            const designSelectedEvent = new CustomEvent('designSelected', {
+              detail: { svgPath: currentDesign }
+            });
+            window.dispatchEvent(designSelectedEvent);
+
+            // Load the 3D configuration (for logos and other settings)
+            setTimeout(() => {
+              loadJustThe3DConfig(config);
+              // Hide canvas loader after all async operations complete
+              setTimeout(() => {
+                if (window.hideCanvasLoader) window.hideCanvasLoader();
+                // Only mark clean here if we don't have saved colors (otherwise it's handled in colorRestoreHandler)
+                if (isSavedDesign && !hasSavedColors) {
+                  setDesignClean();
+                  isLoadingConfig = false; // Re-enable dirty tracking after loading
+                  // Remove loading state from localStorage after a delay
+                  setTimeout(() => {
+                    localStorage.removeItem('jerseyDesignLoading');
+                  }, 2000);
+                }
+              }, 800);
+            }, 200);
           }, 100);
+        }, 100);
       }
     } else if (config.activeTab === 'colors') {
       // Load colors & stripes mode configuration
@@ -3059,20 +3347,39 @@ function loadJerseyConfiguration(isSavedDesign) {
       setTimeout(() => {
         loadJustThe3DConfig(config);
 
-        // Hide canvas loader after all async operations complete
-        setTimeout(() => {
-          if (window.hideCanvasLoader) window.hideCanvasLoader();
-        }, 800);
+                // Hide canvas loader after all async operations complete
+                setTimeout(() => {
+                  if (window.hideCanvasLoader) window.hideCanvasLoader();
+                  // Mark design as clean after all loading operations complete
+                  // This ensures that programmatic changes during load don't mark it as dirty
+                  if (isSavedDesign) {
+                    setDesignClean();
+                    isLoadingConfig = false; // Re-enable dirty tracking after loading
+                    // Remove loading state from localStorage after a delay
+                    // This gives time for any delayed events (like color restoration) to complete
+                    setTimeout(() => {
+                      localStorage.removeItem('jerseyDesignLoading');
+                    }, 2000);
+                  }
+                }, 800);
       }, 200);
     }
   } else {
     // No saved configuration, load default 3D config
     loadJustThe3DConfig(null);
 
-    // Hide canvas loader after model loads (no design to load)
-    setTimeout(() => {
-      if (window.hideCanvasLoader) window.hideCanvasLoader();
-    }, 1000);
+      // Hide canvas loader after model loads (no design to load)
+      setTimeout(() => {
+        if (window.hideCanvasLoader) window.hideCanvasLoader();
+        // Reset loading flag if it was set
+        if (isSavedDesign) {
+          isLoadingConfig = false;
+          // Remove loading state from localStorage
+          setTimeout(() => {
+            localStorage.removeItem('jerseyDesignLoading');
+          }, 2000);
+        }
+      }, 1000);
   }
 }
 
@@ -3138,7 +3445,7 @@ async function detectSharedDesign() {
               .select('owner')
               .eq('short_code', shortCode)
               .single();
-            
+
             if (ownerData && ownerData.owner === user.id) {
               // User owns this design - enable direct save/overwrite
               currentDesignId = data.id;
@@ -3189,6 +3496,21 @@ async function detectSharedDesign() {
 
 // Initialize configuration loading on page load
 document.addEventListener('DOMContentLoaded', () => {
+  // Clean up any stale loading flags from previous sessions
+  // (flags older than 30 seconds are considered stale)
+  const loadingState = localStorage.getItem('jerseyDesignLoading');
+  if (loadingState) {
+    try {
+      const { timestamp } = JSON.parse(loadingState);
+      const now = Date.now();
+      if (now - timestamp > 30000) {
+        localStorage.removeItem('jerseyDesignLoading');
+      }
+    } catch (e) {
+      localStorage.removeItem('jerseyDesignLoading');
+    }
+  }
+  
   // Detect and load shared designs
   setTimeout(() => {
     detectSharedDesign();
@@ -3199,6 +3521,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (homeButton) {
     homeButton.addEventListener('click', () => {
       localStorage.removeItem('jerseyConfig');
+      localStorage.removeItem('jerseyDesignLoading');
       console.log('Cleared saved config on home button click');
     });
   }

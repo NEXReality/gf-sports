@@ -45,6 +45,27 @@ function hideLoading() {
     }
 }
 
+// Helper function to get base path (repository name) for GitHub Pages
+// Returns '/gf-sports' on GitHub Pages or '' for local development
+function getBasePath() {
+    const pathname = window.location.pathname;
+    // Extract repo name from path like /gf-sports/my-designs/index.html
+    // or /gf-sports/index.html
+    const pathParts = pathname.split('/').filter(part => part);
+    
+    // If we're on GitHub Pages, the first part is usually the repo name
+    // Check if we're on github.io domain
+    if (window.location.hostname.includes('github.io')) {
+        // On GitHub Pages, first path segment is the repo name
+        if (pathParts.length > 0) {
+            return `/${pathParts[0]}`;
+        }
+    }
+    
+    // For local development or if no repo name found, return empty string
+    return '';
+}
+
 // Function to update configurator link based on query parameter
 function updateConfiguratorLink() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -54,10 +75,10 @@ function updateConfiguratorLink() {
     
     if (configuratorLink) {
         if (from === 'socks') {
-            configuratorLink.href = './socks-configurator/index.html';
+            configuratorLink.href = '../socks-configurator/index.html';
         } else {
             // Default to jersey if from=jersey or no parameter
-            configuratorLink.href = './jersey-configurator/index.html';
+            configuratorLink.href = '../jersey-configurator/index.html';
         }
     }
     
@@ -436,7 +457,8 @@ function shareDesign(event) {
     params.append('metadata', JSON.stringify(designMetadata));
 
     const configuratorPath = productType === 'socks' ? 'socks-configurator' : 'jersey-configurator';
-    const shareUrl = `${window.location.origin}/${configuratorPath}/share/?${params.toString()}`;
+    const basePath = getBasePath();
+    const shareUrl = `${window.location.origin}${basePath}/${configuratorPath}/share/?${params.toString()}`;
 
     // Copy the URL to clipboard
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -543,7 +565,8 @@ async function deleteDesign(event) {
 function openDesign(shortCode, productType) {
     if (shortCode) {
         const configuratorPath = productType === 'socks' ? 'socks-configurator' : 'jersey-configurator';
-        const designUrl = `${window.location.origin}/${configuratorPath}/index.html?shortCode=${shortCode}`;
+        const basePath = getBasePath();
+        const designUrl = `${window.location.origin}${basePath}/${configuratorPath}/index.html?shortCode=${shortCode}`;
         window.open(designUrl, '_self');
     }
 }
