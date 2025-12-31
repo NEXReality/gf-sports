@@ -378,7 +378,7 @@ body.share-page .viewer-container {
 
 /* Language handling */
 [data-fr]:not(option) {
-  display: none;
+  display: none !important;
 }
 
 .lang-fr [data-en]:not(option) {
@@ -386,7 +386,7 @@ body.share-page .viewer-container {
 }
 
 .lang-fr [data-fr]:not(option) {
-  display: inline;
+  display: revert !important;
 }
 
 @media (max-width: 768px) {

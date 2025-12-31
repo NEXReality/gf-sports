@@ -91,12 +91,20 @@ async function renderOrderDetails(order, profile) {
 
   designList.innerHTML = "" // Clear existing content
 
+  // Determine quantity unit for total based on product types (same logic as email function)
+  const hasJersey = orderItems.some((item) => item.product_type === 'jersey');
+  const hasSocks = orderItems.some((item) => item.product_type === 'socks');
+  const totalQuantityUnit = hasJersey && hasSocks ? 'items' : (hasJersey ? 'pieces' : 'pairs');
+
   for (const item of orderItems) {
     const designItem = document.createElement("div")
     designItem.className = "design-item"
 
     // Check if product is jersey (don't show silicon grip for jerseys)
     const isJersey = item.product_type === 'jersey';
+    
+    // Determine quantity unit for this item (pieces for jersey, pairs for socks)
+    const itemQuantityUnit = isJersey ? 'pieces' : 'pairs';
     
     const sizeColumns = Object.entries(item.sizes).reduce((acc, [size, quantity], index) => {
       const column = Math.floor(index / 3)
@@ -111,7 +119,7 @@ async function renderOrderDetails(order, profile) {
       
       acc[column].push(`
           <div class="size-item">
-            ${getTranslation("sizeLabel", currentLang)} ${size}: ${quantity} ${getTranslation("pairsLabel", currentLang)}${siliconGripHtml}
+            ${getTranslation("sizeLabel", currentLang)} ${size}: ${quantity} ${getTranslation(`${itemQuantityUnit}Label`, currentLang)}${siliconGripHtml}
           </div>
         `)
       return acc
@@ -146,7 +154,7 @@ async function renderOrderDetails(order, profile) {
           <div class="size-grid">
             ${sizeGrid}
           </div>
-          <div class="design-total">${getTranslation("totalLabel", currentLang)} ${item.item_total_quantity} ${getTranslation("pairsLabel", currentLang)}</div>
+          <div class="design-total">${getTranslation("totalLabel", currentLang)} ${item.item_total_quantity} ${getTranslation(`${itemQuantityUnit}Label`, currentLang)}</div>
         </div>
       `
 
@@ -154,9 +162,9 @@ async function renderOrderDetails(order, profile) {
     totalQuantity += item.item_total_quantity
   }
 
-  // Update total order quantity
+  // Update total order quantity with correct unit
   document.getElementById("total-quantity").textContent =
-    `${totalQuantity} ${getTranslation("totalQuantity", currentLang)}`
+    `${totalQuantity} ${getTranslation(`${totalQuantityUnit}Label`, currentLang)}`
 
   // Render customer details
   const detailsGrid = document.querySelector(".details-grid")

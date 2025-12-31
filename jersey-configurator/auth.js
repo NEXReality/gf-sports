@@ -816,96 +816,57 @@ window.getCurrentLanguage = getCurrentLanguage;
 // Make alertMessages available globally (for updateUploadStatus to use)
 window.alertMessages = alertMessages;
 
-// Language toggle functionality
-const languageToggle = document.querySelector('.toggle-switch');
-
-if (languageToggle) {
-  languageToggle.addEventListener('click', () => {
-    const currentLang = localStorage.getItem('language') || 'en';
-    const nextLang = currentLang === 'en' ? 'fr' : 'en';
-    setLanguage(nextLang);
-  });
-}
-
-function updateSelectOptions(lang) {
-  // Select all select elements
-  const selects = document.querySelectorAll('select');
-
-  selects.forEach(select => {
-    // Get all options for this select
-    const options = select.getElementsByTagName('option');
-
-    // Update option text content based on language
-    Array.from(options).forEach(option => {
-      const translatedText = option.getAttribute(`data-${lang}`);
-      if (translatedText) {
-        option.textContent = translatedText;
-      }
-      // Make sure option is visible
-      option.style.display = '';
-    });
-  });
-}
-
-function setLanguage(lang) {
-  const frenchElements = document.querySelectorAll('[data-fr]');
-  const englishElements = document.querySelectorAll('[data-en]');
-
-  // Set display for text elements (but not option elements)
-  if (lang === 'fr') {
-    frenchElements.forEach(el => {
-      if (el.tagName !== 'OPTION') el.style.display = 'inline';
-    });
-    englishElements.forEach(el => {
-      if (el.tagName !== 'OPTION') el.style.display = 'none';
-    });
-    if (languageToggle) languageToggle.setAttribute('aria-pressed', 'true');
-  } else {
-    frenchElements.forEach(el => {
-      if (el.tagName !== 'OPTION') el.style.display = 'none';
-    });
-    englishElements.forEach(el => {
-      if (el.tagName !== 'OPTION') el.style.display = 'inline';
-    });
-    if (languageToggle) languageToggle.setAttribute('aria-pressed', 'false');
-  }
-
-  // Update select options text content
-  updateSelectOptions(lang);
-  updatePlaceholders(lang);
-  localStorage.setItem('language', lang);
-  document.documentElement.lang = lang;
-
-  // Update title if it exists
-  const titleElement = document.querySelector('title');
-  if (titleElement && titleElement.getAttribute(`data-${lang}`)) {
-    document.title = titleElement.getAttribute(`data-${lang}`);
-  }
-
-  // Update design cards if they exist (for my-designs page)
-  if (typeof updateDesignCards === 'function' && document.querySelector(".design-card")) {
-    updateDesignCards(lang);
-  }
-}
-
-function updatePlaceholders(lang) {
-  const inputs = document.querySelectorAll('input[placeholder]');
-  inputs.forEach(input => {
-    const translatedPlaceholder = input.getAttribute(`data-${lang}-placeholder`);
-    if (translatedPlaceholder) {
-      input.placeholder = translatedPlaceholder;
-    }
-  });
-}
-
-// Initialize language on page load
+// Language toggle functionality - script.js handles the main logic
+// This file just ensures language is initialized if script.js hasn't loaded yet
 document.addEventListener('DOMContentLoaded', () => {
-  if (localStorage.getItem('language') === null) {
-    localStorage.setItem('language', 'en');
-  }
-  const initialLang = localStorage.getItem('language');
-  setLanguage(initialLang);
-  updateSelectOptions(initialLang);
+  // Wait a bit for script.js to initialize (script.js loads after auth.js)
+  setTimeout(() => {
+    const toggle = document.querySelector('.toggle-switch');
+    
+    // Only add event listener if script.js hasn't already set it up
+    if (toggle && !toggle.hasAttribute('data-listener-attached')) {
+      // Fallback: if script.js didn't run, set up the toggle here
+      toggle.setAttribute('data-listener-attached', 'true');
+      
+      // Create a fallback setLanguage if script.js didn't define it
+      if (typeof window.setLanguage === 'undefined') {
+        window.setLanguage = function(lang) {
+          const root = document.documentElement;
+          const isFrench = lang === 'fr';
+          
+          // Remove existing lang class and add the correct one
+          root.classList.remove('lang-fr');
+          if (isFrench) {
+            root.classList.add('lang-fr');
+          }
+          root.lang = lang;
+          
+          const toggle = document.querySelector('.toggle-switch');
+          if (toggle) {
+            toggle.setAttribute('aria-pressed', isFrench ? 'true' : 'false');
+          }
+          
+          localStorage.setItem('language', lang);
+        };
+      }
+      
+      toggle.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const currentLang = localStorage.getItem('language') || 'en';
+        const nextLang = currentLang === 'en' ? 'fr' : 'en';
+        if (typeof window.setLanguage === 'function') {
+          window.setLanguage(nextLang);
+        }
+      });
+      
+      // Initialize language
+      if (typeof window.setLanguage === 'function') {
+        const savedLang = localStorage.getItem('language') || 'en';
+        window.setLanguage(savedLang);
+      }
+    }
+  }, 50);
 });
 
 

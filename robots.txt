@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /admin-my-designs/
+Disallow: /admin-user-designs/
+Disallow: /jersey-configurator/admin-design/
+Disallow: /socks-configurator/admin-design/
+Disallow: /order-details/
+
+Sitemap: http://gf-sports.fr/sitemap.xml

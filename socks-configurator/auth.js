@@ -333,6 +333,14 @@ function getTranslation(key, lang) {
       en: "pairs",
       fr: "paires",
     },
+    piecesLabel: {
+      en: "pieces",
+      fr: "pièces",
+    },
+    itemsLabel: {
+      en: "items",
+      fr: "articles",
+    },
     siliconGripLabel: {
       en: "Silicon Grip:",
       fr: "Grip en silicone:",
