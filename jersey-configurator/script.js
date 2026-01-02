@@ -235,7 +235,7 @@ function markDesignDirty() {
   if (isLoadingConfig) {
     return;
   }
-  
+
   // Check localStorage for loading state (persists across navigation)
   const loadingState = localStorage.getItem('jerseyDesignLoading');
   if (loadingState) {
@@ -243,7 +243,7 @@ function markDesignDirty() {
       const { timestamp, designId } = JSON.parse(loadingState);
       const now = Date.now();
       const timeSinceLoad = now - timestamp;
-      
+
       // If we're within 10 seconds of loading and it's the same design, don't mark dirty
       // This handles async operations and navigation timing issues
       if (timeSinceLoad < 10000) {
@@ -260,7 +260,7 @@ function markDesignDirty() {
       localStorage.removeItem('jerseyDesignLoading');
     }
   }
-  
+
   // This is a real user change - mark as dirty and clear any loading flags
   designDirty = true;
   window.designDirty = true;
@@ -1586,15 +1586,23 @@ function detectUniqueColors(svgElement) {
 
     // Extract class definitions with fill colors
     // Matches patterns like: .st0{...fill:#FFD700...} or .st2{...fill:#2698D1...}
+    // This regex matches single-class selectors only for backward compatibility
     const classRegex = /\.([a-zA-Z0-9_-]+)\s*\{[^}]*fill:\s*([#a-fA-F0-9]+)[^}]*\}/g;
 
     let match;
     while ((match = classRegex.exec(cssContent)) !== null) {
       const className = match[1];
-      const color = match[2].toLowerCase();
+      let color = match[2].toLowerCase();
+
+      // Normalize 3-char hex to 6-char (e.g., #fff -> #ffffff)
+      if (/^#[a-fA-F0-9]{3}$/.test(color)) {
+        color = '#' + color[1] + color[1] + color[2] + color[2] + color[3] + color[3];
+      }
 
       // Skip if color is 'none' or similar
       if (color && color !== 'none') {
+        // For CSS cascade: later rules override earlier ones
+        // So we always update the color if this class was already detected
         classMap.set(className, {
           className: className,
           color: color,
@@ -1621,15 +1629,77 @@ function detectUniqueColors(svgElement) {
     return 100;
   }
 
+  // Helper function to check if a class has a fill defined in the style block
+  function classHasFillInStyle(className) {
+    return classMap.has(className);
+  }
+
+  // Helper function to get the computed fill of an element
+  // Returns the fill color if explicitly set, or null if element defaults to black
+  function getElementFill(element, cssContent) {
+    // Check for inline fill attribute
+    const inlineFill = element.getAttribute('fill');
+    if (inlineFill && inlineFill !== 'none') {
+      return inlineFill.toLowerCase();
+    }
+
+    // Check for inline style with fill
+    const style = element.getAttribute('style');
+    if (style) {
+      const fillMatch = style.match(/fill:\s*([^;]+)/i);
+      if (fillMatch && fillMatch[1] && fillMatch[1].trim() !== 'none') {
+        return fillMatch[1].trim().toLowerCase();
+      }
+    }
+
+    // Check if element has a class with defined fill
+    const classAttr = element.getAttribute('class');
+    if (classAttr) {
+      // Handle multiple classes
+      const classes = classAttr.split(/\s+/);
+      for (const cls of classes) {
+        if (classHasFillInStyle(cls)) {
+          return classMap.get(cls).color;
+        }
+      }
+    }
+
+    // No fill defined - element will default to black (SVG default)
+    return null;
+  }
+
+  // Track elements that default to black (no fill defined)
+  let defaultBlackCount = 0;
+  let defaultBlackArea = 0;
+
   // Step 2: Traverse SVG to count elements for each class
   function traverseElement(element) {
     // Get the class attribute
     const classAttr = element.getAttribute('class');
+    const tagName = element.tagName ? element.tagName.toLowerCase() : '';
 
-    if (classAttr && classMap.has(classAttr)) {
-      const classInfo = classMap.get(classAttr);
-      classInfo.elementCount++;
-      classInfo.totalArea += estimateElementArea(element);
+    // Only consider shape elements (path, polygon, rect, circle, ellipse, line, polyline)
+    const shapeElements = ['path', 'polygon', 'rect', 'circle', 'ellipse', 'line', 'polyline'];
+    const isShapeElement = shapeElements.includes(tagName);
+
+    if (isShapeElement) {
+      if (classAttr && classMap.has(classAttr)) {
+        const classInfo = classMap.get(classAttr);
+        classInfo.elementCount++;
+        classInfo.totalArea += estimateElementArea(element);
+      } else {
+        // Check if this element has no fill defined (defaults to black)
+        const fill = getElementFill(element, null);
+        if (fill === null) {
+          // Element has no fill, defaults to black
+          defaultBlackCount++;
+          defaultBlackArea += estimateElementArea(element);
+        } else if (fill !== 'none') {
+          // Element has inline fill - check if we need to track it
+          // For now, we focus on the CSS classes approach
+          // But we could add inline colors to a separate tracking if needed
+        }
+      }
     }
 
     // Recursively traverse child elements
@@ -1641,6 +1711,17 @@ function detectUniqueColors(svgElement) {
   // Start traversal from the root SVG element
   if (svgDoc) {
     traverseElement(svgDoc);
+  }
+
+  // If there are elements that default to black, add a pseudo-class entry
+  if (defaultBlackCount > 0) {
+    classMap.set('__default_black__', {
+      className: '__default_black__',
+      color: '#000000',
+      elementCount: defaultBlackCount,
+      totalArea: defaultBlackArea
+    });
+    debugLog(`Found ${defaultBlackCount} elements defaulting to black with total area ${defaultBlackArea}`);
   }
 
   // Convert Map to Array and calculate dominance score
@@ -1776,8 +1857,9 @@ function populateColorPickers(classArray) {
  * Modifies the hidden SVG DOM, then triggers re-rasterization
  * @param {string} className - The SVG class name (e.g., "st0", "st2")
  * @param {string} newColor - The new color (hex format)
+ * @param {boolean} skipRasterize - If true, skip the re-rasterization (useful for batching updates)
  */
-function updateSVGColorByClass(className, newColor) {
+function updateSVGColorByClass(className, newColor, skipRasterize = false) {
   // Access the hidden SVG element
   const svgElement = window.jerseyViewer?.currentSVGElement;
 
@@ -1788,6 +1870,84 @@ function updateSVGColorByClass(className, newColor) {
 
   debugLog(`Updating class "${className}" to color: ${newColor}`);
 
+  // Special handling for __default_black__ pseudo-class
+  // This class represents elements without any fill that default to black
+  if (className === '__default_black__') {
+    const shapeElements = ['path', 'polygon', 'rect', 'circle', 'ellipse', 'line', 'polyline'];
+    let updatedCount = 0;
+
+    // Helper to check if element was originally a default-black element
+    // or if it has no fill defined (for first-time detection)
+    function isDefaultBlackElement(element) {
+      // Check if already marked as default-black (from previous update)
+      if (element.hasAttribute('data-default-black')) {
+        return true;
+      }
+
+      // First-time check: element has no fill defined at all
+      // Check inline fill attribute
+      if (element.hasAttribute('fill') && element.getAttribute('fill') !== '') {
+        return false;
+      }
+
+      // Check inline style with fill
+      const style = element.getAttribute('style');
+      if (style && /fill\s*:/i.test(style)) {
+        return false;
+      }
+
+      // Check if element has a class with fill defined in stylesheet
+      const classAttr = element.getAttribute('class');
+      if (classAttr) {
+        const styleElement = svgElement.querySelector('style');
+        if (styleElement) {
+          const cssContent = styleElement.textContent;
+          const fillRegex = new RegExp(`\\.${classAttr}\\s*\\{[^}]*fill\\s*:`);
+          if (fillRegex.test(cssContent)) {
+            return false;
+          }
+        }
+      }
+
+      // No fill defined - this is a default black element
+      return true;
+    }
+
+    // Traverse and update elements with no fill defined
+    function updateDefaultBlackElements(element) {
+      const tagName = element.tagName ? element.tagName.toLowerCase() : '';
+
+      if (shapeElements.includes(tagName)) {
+        if (isDefaultBlackElement(element)) {
+          element.setAttribute('fill', newColor);
+          // Mark this element so we can find it again on subsequent updates
+          element.setAttribute('data-default-black', 'true');
+          updatedCount++;
+        }
+      }
+
+      // Recursively process children
+      for (let i = 0; i < element.children.length; i++) {
+        updateDefaultBlackElements(element.children[i]);
+      }
+    }
+
+    updateDefaultBlackElements(svgElement);
+    debugLog(`Updated ${updatedCount} elements with default black fill to ${newColor}`);
+
+    // Trigger re-rasterization unless skipped (for batching)
+    if (!skipRasterize) {
+      if (window.jerseyViewer && window.jerseyViewer.rasterizeAndLoadSVG) {
+        debugLog('Re-rasterizing SVG with new colors...');
+        window.jerseyViewer.rasterizeAndLoadSVG();
+      } else {
+        console.warn('rasterizeAndLoadSVG method not available');
+      }
+    }
+    return;
+  }
+
+  // Standard handling for CSS class-based colors
   // Find and update the style block
   const styleElement = svgElement.querySelector('style');
 
@@ -1811,12 +1971,14 @@ function updateSVGColorByClass(className, newColor) {
   // Update the style element
   styleElement.textContent = updatedCSS;
 
-  // Trigger re-rasterization
-  if (window.jerseyViewer && window.jerseyViewer.rasterizeAndLoadSVG) {
-    debugLog('Re-rasterizing SVG with new colors...');
-    window.jerseyViewer.rasterizeAndLoadSVG();
-  } else {
-    console.warn('rasterizeAndLoadSVG method not available');
+  // Trigger re-rasterization unless skipped (for batching)
+  if (!skipRasterize) {
+    if (window.jerseyViewer && window.jerseyViewer.rasterizeAndLoadSVG) {
+      debugLog('Re-rasterizing SVG with new colors...');
+      window.jerseyViewer.rasterizeAndLoadSVG();
+    } else {
+      console.warn('rasterizeAndLoadSVG method not available');
+    }
   }
 }
 
@@ -1873,18 +2035,21 @@ function restoreDesignColors(designColors) {
   console.log(`🔍 Found ${colorPickers.length} color pickers to update`);
   debugLog(`🔍 Found ${colorPickers.length} color pickers to update`);
 
-  // Apply each saved color
+  // Apply each saved color (batch updates by skipping rasterization until the last one)
+  const validColorCount = Math.min(colorPickers.length, designColors.length);
+
   colorPickers.forEach((picker, index) => {
     if (index < designColors.length) {
       const savedColor = designColors[index];
       const className = picker.dataset.className;
+      const isLastColor = (index === validColorCount - 1);
 
       console.log(`  🎨 Restoring color ${index + 1}: ${savedColor} to class ${className}`);
       debugLog(`  Restoring color ${index}: ${savedColor} to class ${className}`);
 
       if (className && savedColor) {
-        // Update the SVG color
-        updateSVGColorByClass(className, savedColor);
+        // Update the SVG color (skip rasterization for all but the last)
+        updateSVGColorByClass(className, savedColor, !isLastColor);
 
         // Update the color picker UI
         picker.value = savedColor;
@@ -2992,7 +3157,7 @@ function loadJerseyConfiguration(isSavedDesign) {
   if (isSavedDesign) {
     setDesignClean();
     isLoadingConfig = true; // Prevent marking dirty during loading
-    
+
     // Store loading state in localStorage (persists across navigation)
     // This helps handle timing issues with async operations
     const loadingState = {
@@ -3347,39 +3512,39 @@ function loadJerseyConfiguration(isSavedDesign) {
       setTimeout(() => {
         loadJustThe3DConfig(config);
 
-                // Hide canvas loader after all async operations complete
-                setTimeout(() => {
-                  if (window.hideCanvasLoader) window.hideCanvasLoader();
-                  // Mark design as clean after all loading operations complete
-                  // This ensures that programmatic changes during load don't mark it as dirty
-                  if (isSavedDesign) {
-                    setDesignClean();
-                    isLoadingConfig = false; // Re-enable dirty tracking after loading
-                    // Remove loading state from localStorage after a delay
-                    // This gives time for any delayed events (like color restoration) to complete
-                    setTimeout(() => {
-                      localStorage.removeItem('jerseyDesignLoading');
-                    }, 2000);
-                  }
-                }, 800);
+        // Hide canvas loader after all async operations complete
+        setTimeout(() => {
+          if (window.hideCanvasLoader) window.hideCanvasLoader();
+          // Mark design as clean after all loading operations complete
+          // This ensures that programmatic changes during load don't mark it as dirty
+          if (isSavedDesign) {
+            setDesignClean();
+            isLoadingConfig = false; // Re-enable dirty tracking after loading
+            // Remove loading state from localStorage after a delay
+            // This gives time for any delayed events (like color restoration) to complete
+            setTimeout(() => {
+              localStorage.removeItem('jerseyDesignLoading');
+            }, 2000);
+          }
+        }, 800);
       }, 200);
     }
   } else {
     // No saved configuration, load default 3D config
     loadJustThe3DConfig(null);
 
-      // Hide canvas loader after model loads (no design to load)
-      setTimeout(() => {
-        if (window.hideCanvasLoader) window.hideCanvasLoader();
-        // Reset loading flag if it was set
-        if (isSavedDesign) {
-          isLoadingConfig = false;
-          // Remove loading state from localStorage
-          setTimeout(() => {
-            localStorage.removeItem('jerseyDesignLoading');
-          }, 2000);
-        }
-      }, 1000);
+    // Hide canvas loader after model loads (no design to load)
+    setTimeout(() => {
+      if (window.hideCanvasLoader) window.hideCanvasLoader();
+      // Reset loading flag if it was set
+      if (isSavedDesign) {
+        isLoadingConfig = false;
+        // Remove loading state from localStorage
+        setTimeout(() => {
+          localStorage.removeItem('jerseyDesignLoading');
+        }, 2000);
+      }
+    }, 1000);
   }
 }
 
@@ -3510,7 +3675,7 @@ document.addEventListener('DOMContentLoaded', () => {
       localStorage.removeItem('jerseyDesignLoading');
     }
   }
-  
+
   // Detect and load shared designs
   setTimeout(() => {
     detectSharedDesign();

@@ -205,15 +205,20 @@ async function loadSharedDesign() {
                     console.log('📋 Detected SVG classes:', window.currentSVGColors.map(c => c.className));
 
                     // Apply each saved color to the corresponding class by index
+                    // Skip rasterization for all colors except the last one to batch updates
+                    const validColorCount = Math.min(savedColors.length, window.currentSVGColors.length);
+
                     savedColors.forEach((customColor, index) => {
                         if (index < window.currentSVGColors.length) {
                             const colorInfo = window.currentSVGColors[index];
                             const className = colorInfo.className;
+                            const isLastColor = (index === validColorCount - 1);
 
                             console.log(`🎨 Applying saved color ${index + 1}: class "${className}" → ${customColor}`);
 
                             if (typeof updateSVGColorByClass === 'function') {
-                                updateSVGColorByClass(className, customColor);
+                                // Skip rasterization for all but the last color update
+                                updateSVGColorByClass(className, customColor, !isLastColor);
                             } else {
                                 console.error('❌ updateSVGColorByClass function not available');
                             }

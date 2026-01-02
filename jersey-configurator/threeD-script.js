@@ -115,6 +115,9 @@ class JerseyViewer {
         this.partTextures = {};
         this.excludedMaterials = ['stitches_sleeves', 'cover_stitches', 'stitches_main'];
 
+        // Detect if this is a shared page (read-only view)
+        this.isSharedPage = window.location.pathname.includes('/share/');
+
         // Track active mode: 'colors' (stripes) or 'design' (SVG design)
         this.activeMode = 'colors'; // Default to colors & stripes mode
 
@@ -730,6 +733,9 @@ class JerseyViewer {
 
     // Handle mouse down for logo dragging
     onLogoMouseDown(event) {
+        // Disable logo interaction on shared pages
+        if (this.isSharedPage) return;
+
         // Calculate mouse position in normalized device coordinates (-1 to +1)
         const rect = this.renderer.domElement.getBoundingClientRect();
         this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -924,6 +930,9 @@ class JerseyViewer {
 
     // Handle mouse move for logo dragging
     onLogoMouseMove(event) {
+        // Disable logo interaction on shared pages
+        if (this.isSharedPage) return;
+
         if (!this.isDragging || !this.draggedPart) return;
 
         // Calculate mouse position
