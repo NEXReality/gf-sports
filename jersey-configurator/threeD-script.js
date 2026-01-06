@@ -1354,9 +1354,10 @@ class JerseyViewer {
     // Rasterize current SVG and load to all Fabric canvases
     rasterizeAndLoadSVG() {
         if (!this.currentSVGElement) {
-            console.warn('No SVG element to rasterize');
+            console.warn('[DEBUG] No SVG element to rasterize');
             return;
         }
+        debugLog('[DEBUG] rasterizeAndLoadSVG called with SVG element', this.currentSVGElement);
 
         const startTime = performance.now();
 
@@ -1370,6 +1371,7 @@ class JerseyViewer {
         img.crossOrigin = 'anonymous';
 
         img.onload = () => {
+            debugLog('[DEBUG] SVG rasterization started via img.onload');
             debugLog('SVG rasterizing...');
 
             // Rasterize to canvas

@@ -1,4 +1,5 @@
 // Share page script - loads and displays shared designs
+// Note: DEBUG_MODE and debugLog are defined in ../script.js which is loaded first
 
 // Function to get current language
 function getCurrentLanguage() {
@@ -30,15 +31,15 @@ function getURLParameters() {
     const name = urlParams.get('name');
     const metadataString = urlParams.get('metadata');
 
-    console.log('🔍 Share page - Parsing URL parameters:');
-    console.log('  - name:', name);
-    console.log('  - metadataString length:', metadataString ? metadataString.length : 0);
+    debugLog('🔍 Share page - Parsing URL parameters:');
+    debugLog('  - name:', name);
+    debugLog('  - metadataString length:', metadataString ? metadataString.length : 0);
 
     let metadata = null;
     if (metadataString) {
         try {
             metadata = JSON.parse(decodeURIComponent(metadataString));
-            console.log('✅ Metadata parsed successfully:', metadata);
+            debugLog('✅ Metadata parsed successfully:', metadata);
         } catch (error) {
             console.error('❌ Error parsing metadata:', error);
             console.error('  - Raw metadata string (first 100 chars):', metadataString.substring(0, 100));
@@ -92,18 +93,18 @@ async function loadSharedDesign() {
         return;
     }
 
-    console.log('📦 Loading shared design:', name, metadata);
+    debugLog('📦 Loading shared design:', name, metadata);
 
     // Wait for jerseyViewer to be available on window object
     let attempts = 0;
     const maxAttempts = 100; // 100 attempts * 200ms = 20 seconds max
-    console.log('⏳ Waiting for jerseyViewer to initialize...');
+    debugLog('⏳ Waiting for jerseyViewer to initialize...');
 
     while ((!window.jerseyViewer) && attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 200));
         attempts++;
         if (attempts % 5 === 0) {
-            console.log(`  ... still waiting (attempt ${attempts}/${maxAttempts})`);
+            debugLog(`  ... still waiting (attempt ${attempts}/${maxAttempts})`);
         }
     }
 
@@ -113,7 +114,7 @@ async function loadSharedDesign() {
         return;
     }
 
-    console.log(`✅ Jersey viewer initialized after ${attempts * 200}ms`);
+    debugLog(`✅ Jersey viewer initialized after ${attempts * 200}ms`);
 
     const jerseyViewer = window.jerseyViewer;
 
@@ -146,18 +147,18 @@ async function loadSharedDesign() {
     const modelFilename = MODEL_MAP[modelKey] || 'insert_collar_reglan_01.glb';
     const modelPath = `../../jersey_3d_models/${modelFilename}`;
 
-    console.log(`🎽 Loading 3D model: ${modelPath}`);
+    debugLog(`🎽 Loading 3D model: ${modelPath}`);
 
     try {
         // Load the 3D model first
         await jerseyViewer.loadModel(modelPath);
-        console.log('✅ 3D model loaded successfully');
+        debugLog('✅ 3D model loaded successfully');
 
         // Use the existing loadInitialConfig method to handle everything
         // (SVG, colors, stripes, logos, etc.)
-        console.log('📦 Loading configuration using loadInitialConfig...');
+        debugLog('📦 Loading configuration using loadInitialConfig...');
         jerseyViewer.loadInitialConfig(metadata);
-        console.log('✅ Configuration loaded successfully');
+        debugLog('✅ Configuration loaded successfully');
 
         // Wait for loadInitialConfig to complete its async operations
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -165,8 +166,8 @@ async function loadSharedDesign() {
         // Apply SVG design colors if in designs mode
         // This must happen AFTER loadInitialConfig to override any default colors
         if (metadata.activeTab === 'designs' && designData && designData.colors) {
-            console.log('🌈 Applying custom SVG design colors:', designData.colors);
-            console.log('   (Overriding default colors:', designData.designColors, ')');
+            debugLog('🌈 Applying custom SVG design colors:', designData.colors);
+            debugLog('   (Overriding default colors:', designData.designColors, ')');
 
             // Wait for SVG to load
             let svgElementDetected = false;
@@ -179,19 +180,36 @@ async function loadSharedDesign() {
 
                 if (window.jerseyViewer?.currentSVGElement) {
                     svgElementDetected = true;
-                    console.log(`✅ SVG element detected on attempt ${attempts}`);
+                    debugLog(`✅ SVG element detected on attempt ${attempts}`);
                 } else {
-                    console.log(`⏳ Waiting for SVG element (attempt ${attempts}/${maxAttempts})...`);
+                    debugLog(`⏳ Waiting for SVG element (attempt ${attempts}/${maxAttempts})...`);
                 }
             }
 
             if (svgElementDetected) {
                 // Manually detect colors from the SVG element
-                console.log('🔍 Detecting colors from SVG element...');
+                debugLog('🔍 Detecting colors from SVG element...');
                 if (typeof detectUniqueColors === 'function') {
                     const detectedColors = detectUniqueColors(window.jerseyViewer.currentSVGElement);
                     window.currentSVGColors = detectedColors;
-                    console.log('📋 Detected SVG color classes:', detectedColors);
+
+                    // Build the class map (REQUIRED for gradient updates to work)
+                    window.currentSVGClassMap = {};
+                    detectedColors.forEach((classInfo, index) => {
+                        // Use the same ID convention as the main app: svg-class-{index}
+                        // This allows the updater to find the original color
+                        const pickerId = `svg-class-${index}`;
+                        window.currentSVGClassMap[pickerId] = {
+                            className: classInfo.className,
+                            originalColor: classInfo.color,
+                            isGradient: classInfo.isGradient || false,
+                            gradientIds: classInfo.gradientIds || [],
+                            isMerged: classInfo.isMerged || false  // Required for merged color updates
+                        };
+                    });
+
+                    debugLog('📋 Detected SVG color classes:', detectedColors);
+                    debugLog('🗺️ Built SVG class map:', window.currentSVGClassMap);
                 } else {
                     console.error('❌ detectUniqueColors function not available');
                 }
@@ -201,8 +219,8 @@ async function loadSharedDesign() {
                 // We map them by index to the detected SVG classes
                 if (window.currentSVGColors && window.currentSVGColors.length > 0) {
                     const savedColors = designData.designColors || [];
-                    console.log('🎨 Saved custom colors to apply:', savedColors);
-                    console.log('📋 Detected SVG classes:', window.currentSVGColors.map(c => c.className));
+                    debugLog('🎨 Saved custom colors to apply:', savedColors);
+                    debugLog('📋 Detected SVG classes:', window.currentSVGColors.map(c => c.className));
 
                     // Apply each saved color to the corresponding class by index
                     // Skip rasterization for all colors except the last one to batch updates
@@ -214,7 +232,7 @@ async function loadSharedDesign() {
                             const className = colorInfo.className;
                             const isLastColor = (index === validColorCount - 1);
 
-                            console.log(`🎨 Applying saved color ${index + 1}: class "${className}" → ${customColor}`);
+                            debugLog(`🎨 Applying saved color ${index + 1}: class "${className}" → ${customColor}`);
 
                             if (typeof updateSVGColorByClass === 'function') {
                                 // Skip rasterization for all but the last color update
@@ -227,7 +245,7 @@ async function loadSharedDesign() {
                         }
                     });
 
-                    console.log('✅ All saved SVG design colors applied');
+                    debugLog('✅ All saved SVG design colors applied');
                 } else {
                     console.error('❌ No colors detected from SVG');
                 }
@@ -238,7 +256,7 @@ async function loadSharedDesign() {
 
         // Apply ribbed collar state if available
         if (metadata.ribbedCollar !== undefined) {
-            console.log('🎚️ Setting ribbed collar:', metadata.ribbedCollar);
+            debugLog('🎚️ Setting ribbed collar:', metadata.ribbedCollar);
             const ribbedCollarCheckboxes = [
                 document.getElementById('ribbed-collar-checkbox-designs'),
                 document.getElementById('ribbed-collar-checkbox-colors')
@@ -256,7 +274,7 @@ async function loadSharedDesign() {
 
         // Set active tab if specified
         if (metadata.activeTab) {
-            console.log('📑 Setting active tab:', metadata.activeTab);
+            debugLog('📑 Setting active tab:', metadata.activeTab);
             const tabRadio = document.querySelector(`input[name="jersey-tab"][value="${metadata.activeTab}"]`);
             if (tabRadio) {
                 tabRadio.checked = true;
@@ -265,13 +283,13 @@ async function loadSharedDesign() {
             }
         }
 
-        console.log('🎉 Shared design loaded successfully!');
+        debugLog('🎉 Shared design loaded successfully!');
 
         // Hide the loading overlay to reveal the 3D viewer
         if (jerseyViewer && jerseyViewer.hideCanvasLoader) {
             setTimeout(() => {
                 jerseyViewer.hideCanvasLoader();
-                console.log('👁️ Loading overlay hidden, 3D viewer now visible');
+                debugLog('👁️ Loading overlay hidden, 3D viewer now visible');
             }, 1500); // Longer delay to ensure stripes are generated
         }
 
@@ -300,11 +318,11 @@ function initializeLanguageToggle() {
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('🚀 Share page DOM loaded, initializing...');
-    console.log('📍 Current URL:', window.location.href);
+    debugLog('🚀 Share page DOM loaded, initializing...');
+    debugLog('📍 Current URL:', window.location.href);
 
     // Wait for threeD-script.js module to load
-    console.log('⏳ Waiting for threeD-script.js module to load...');
+    debugLog('⏳ Waiting for threeD-script.js module to load...');
     let moduleLoadAttempts = 0;
     const maxModuleAttempts = 50; // 50 * 200ms = 10 seconds
 
@@ -312,7 +330,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         await new Promise(resolve => setTimeout(resolve, 200));
         moduleLoadAttempts++;
         if (moduleLoadAttempts % 5 === 0) {
-            console.log(`  ... still waiting for module (attempt ${moduleLoadAttempts}/${maxModuleAttempts})`);
+            debugLog(`  ... still waiting for module (attempt ${moduleLoadAttempts}/${maxModuleAttempts})`);
         }
     }
 
@@ -322,18 +340,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    console.log('✅ threeD-script.js module loaded');
+    debugLog('✅ threeD-script.js module loaded');
 
     // Manually initialize JerseyViewer for share page
     // (threeD-script.js skips auto-init on share pages - see line 3550)
-    console.log('🎬 Manually initializing JerseyViewer...');
+    debugLog('🎬 Manually initializing JerseyViewer...');
     try {
         const { JerseyViewer } = await import('../threeD-script.js');
         window.jerseyViewer = new JerseyViewer('.viewer-container');
-        console.log('✅ JerseyViewer initialized successfully');
+        debugLog('✅ JerseyViewer initialized successfully');
 
         // Now load the shared design
-        console.log('⏰ Calling loadSharedDesign()...');
+        debugLog('⏰ Calling loadSharedDesign()...');
         await loadSharedDesign();
 
     } catch (error) {
