@@ -278,6 +278,33 @@ body.share-page .viewer-container {
   flex-shrink: 0;
 }
 
+.card-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.card-link:hover .card {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  transform: translateY(-4px);
+}
+
+/* Safari-specific: disable hover effect to prevent grid scaling bug */
+.is-safari .card-link:hover .card {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  transform: none !important;
+}
+
+.card-link .card {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.is-safari .card-link .card {
+  /* Safari fix: prevent transition: all inheritance that causes card growth */
+  transition: none !important;
+  transform: none !important;
+}
+
 .card {
   background: var(--color-background);
   border-radius: 12px;
@@ -286,12 +313,8 @@ body.share-page .viewer-container {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  transition: box-shadow 0.2s ease;
 }
 
-.card:hover {
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
-}
 
 .card-image {
   background: #ecf0f3;
@@ -489,16 +512,6 @@ body.share-page .viewer-container {
   margin: 6px;
 }
 
-.card-link {
-  text-decoration: none;
-  color: inherit;
-  display: block;
-}
-
-.card-link:hover .card {
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
-}
-
 .shoulder-cards {
   grid-template-columns: repeat(2, 1fr);
   gap: 24px;
@@ -617,6 +630,8 @@ body.share-page .viewer-container {
 /* Customization panel */
 .customization-panel {
   width: 450px;
+  min-width: 450px;
+  max-width: 450px;
   background: var(--color-background);
   border-left: 1px solid var(--color-border);
   padding: 1.5rem;
@@ -625,13 +640,14 @@ body.share-page .viewer-container {
   position: sticky;
   top: 73px;
   z-index: 1;
+  box-sizing: border-box;
 }
 
 /* Prevent width changes when select opens */
 .customization-panel.select-open {
   width: 450px !important;
-  min-width: 450px;
-  max-width: 450px;
+  min-width: 450px !important;
+  max-width: 450px !important;
 }
 
 /* Ensure select wrapper can escape overflow when open */
@@ -645,6 +661,14 @@ body.share-page .viewer-container {
   position: relative;
   width: 100% !important;
   max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box;
+}
+
+/* Ensure select dropdowns don't cause width changes */
+.customization-panel .select-input,
+.customization-panel .has-input-select {
+  max-width: 100%;
   box-sizing: border-box;
 }
 
@@ -1013,6 +1037,16 @@ body.share-page .viewer-container {
 .customization-panel select {
   position: relative;
   z-index: 10;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Prevent select options from expanding panel width */
+.customization-panel select option {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tab-content select {
@@ -1234,10 +1268,20 @@ body.share-page .viewer-container {
   position: relative;
   display: flex;
   flex-direction: column;
+  transform: scale(1);
+  transform-origin: center center;
+  will-change: transform;
+  -webkit-transform: scale(1);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  -webkit-perspective: 1000;
+  perspective: 1000;
 }
 
 .thumbnail-item:hover {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  transform: scale(1);
+  -webkit-transform: scale(1);
 }
 
 .thumbnail-item img {

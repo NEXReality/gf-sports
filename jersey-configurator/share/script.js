@@ -189,30 +189,38 @@ async function loadSharedDesign() {
             if (svgElementDetected) {
                 // Manually detect colors from the SVG element
                 debugLog('🔍 Detecting colors from SVG element...');
-                if (typeof detectUniqueColors === 'function') {
-                    const detectedColors = detectUniqueColors(window.jerseyViewer.currentSVGElement);
-                    window.currentSVGColors = detectedColors;
 
-                    // Build the class map (REQUIRED for gradient updates to work)
-                    window.currentSVGClassMap = {};
-                    detectedColors.forEach((classInfo, index) => {
-                        // Use the same ID convention as the main app: svg-class-{index}
-                        // This allows the updater to find the original color
-                        const pickerId = `svg-class-${index}`;
-                        window.currentSVGClassMap[pickerId] = {
-                            className: classInfo.className,
-                            originalColor: classInfo.color,
-                            isGradient: classInfo.isGradient || false,
-                            gradientIds: classInfo.gradientIds || [],
-                            isMerged: classInfo.isMerged || false  // Required for merged color updates
-                        };
-                    });
-
-                    debugLog('📋 Detected SVG color classes:', detectedColors);
-                    debugLog('🗺️ Built SVG class map:', window.currentSVGClassMap);
+                // Use async wrapper if available (checks for override), else fall back to sync
+                let detectedColors;
+                const svgPath = designData?.svgPath || window.jerseyViewer?.currentSVGPath;
+                if (typeof detectUniqueColorsWithOverride === 'function') {
+                    detectedColors = await detectUniqueColorsWithOverride(window.jerseyViewer.currentSVGElement, svgPath);
+                } else if (typeof detectUniqueColors === 'function') {
+                    detectedColors = detectUniqueColors(window.jerseyViewer.currentSVGElement);
                 } else {
                     console.error('❌ detectUniqueColors function not available');
+                    return;
                 }
+
+                window.currentSVGColors = detectedColors;
+
+                // Build the class map (REQUIRED for gradient updates to work)
+                window.currentSVGClassMap = {};
+                detectedColors.forEach((classInfo, index) => {
+                    // Use the same ID convention as the main app: svg-class-{index}
+                    // This allows the updater to find the original color
+                    const pickerId = `svg-class-${index}`;
+                    window.currentSVGClassMap[pickerId] = {
+                        className: classInfo.className,
+                        originalColor: classInfo.color,
+                        isGradient: classInfo.isGradient || false,
+                        gradientIds: classInfo.gradientIds || [],
+                        isMerged: classInfo.isMerged || false  // Required for merged color updates
+                    };
+                });
+
+                debugLog('📋 Detected SVG color classes:', detectedColors);
+                debugLog('🗺️ Built SVG class map:', window.currentSVGClassMap);
 
                 // Now apply the custom colors using INDEX-BASED MAPPING
                 // designColors array contains the CUSTOMIZED colors to apply (not original colors)

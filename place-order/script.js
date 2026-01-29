@@ -679,9 +679,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Fetch and populate user data on page load
   fetchAndPopulateUserData()
-  
-  // Initialize language toggle
-  initializeLanguageToggle()
 })
 
 // Language toggle functionality
@@ -778,6 +775,9 @@ function initializeLanguageToggle() {
   const newToggle = toggleSwitch.cloneNode(true);
   toggleSwitch.parentNode.replaceChild(newToggle, toggleSwitch);
   
+  // Mark as having listener attached to prevent auth.js fallback from interfering
+  newToggle.setAttribute('data-listener-attached', 'true');
+  
   // Add click event listener to the new toggle
   newToggle.addEventListener('click', () => {
     const isPressed = newToggle.getAttribute('aria-pressed') === 'true';
@@ -794,17 +794,27 @@ function initializeLanguageToggle() {
   });
 }
 
-// Initialize language on page load
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    const savedLang = localStorage.getItem('language') || 'en';
-    updateLanguageDisplay(savedLang);
-  });
-} else {
-  // DOM is already loaded
+// Initialize language immediately and on page load
+function initLanguage() {
+  // Get saved language from localStorage or default to 'en'
   const savedLang = localStorage.getItem('language') || 'en';
+
+  // Set initial language display immediately (before DOMContentLoaded)
   updateLanguageDisplay(savedLang);
+
+  // Initialize toggle when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      initializeLanguageToggle();
+    });
+  } else {
+    // DOM is already loaded
+    initializeLanguageToggle();
+  }
 }
+
+// Initialize language system
+initLanguage();
 
 
 async function gatherDesignDetails() {

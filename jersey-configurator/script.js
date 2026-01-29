@@ -7,6 +7,11 @@ function debugLog(...args) {
   }
 }
 
+// Global flag to enable/disable design-colors.json overrides
+// Set to false to always use auto-detection instead of manual overrides
+window.USE_DESIGN_OVERRIDES = false;
+
+
 // Save button dropdown functionality
 const dropdownArrow = document.getElementById('dropdown-arrow');
 const saveDropdown = document.querySelector('.save-dropdown');
@@ -231,6 +236,9 @@ async function requireLoginGuard(evt, el) {
   return false;
 }
 
+// Expose requireLoginGuard globally for use in other scripts
+window.requireLoginGuard = requireLoginGuard;
+
 function markDesignDirty() {
   // Don't mark as dirty if we're currently loading a configuration
   if (isLoadingConfig) {
@@ -348,6 +356,8 @@ let currentDesignId = null;
 let isInitialSave = true;
 let isSaving = false;
 let isSharedDesign = false;
+
+
 
 // Get Supabase client (should be available from auth.js)
 // Helper function to get Supabase client - tries to use the one from auth.js first
@@ -815,8 +825,8 @@ function loadFamilyDesigns(familyId) {
         const response = await fetch(svgPath);
         const svgText = await response.text();
 
-        // Detect unique colors in the SVG
-        const colors = detectUniqueColors(svgText);
+        // Detect unique colors in the SVG (checks for override first)
+        const colors = await detectUniqueColorsWithOverride(svgText, svgPath);
         debugLog('Detected colors in design:', colors);
 
         // Store colors globally for use in showDesignCustomization
@@ -927,8 +937,25 @@ function initializeSelectDropdown() {
     }, 200);
   });
 
+  // Store previous value on focus for login guard
+  selectInput.addEventListener('focusin', () => {
+    selectInput.dataset.prevValue = selectInput.value;
+  });
+
   // Handle change event
-  selectInput.addEventListener('change', function () {
+  selectInput.addEventListener('change', async function (e) {
+    const allowed = await requireLoginGuard(e, selectInput);
+    if (!allowed) {
+      // Keep open briefly to allow visual feedback, then close
+      setTimeout(() => {
+        isSelectOpen = false;
+        customizationPanel.classList.remove('select-open');
+      }, 150);
+      return;
+    }
+
+    markDesignDirty();
+
     // Keep open briefly to allow visual feedback, then close
     setTimeout(() => {
       isSelectOpen = false;
@@ -1225,7 +1252,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   ribbedCollarCheckboxes.forEach(checkbox => {
     if (checkbox) {
-      checkbox.addEventListener('change', (e) => {
+      // Store previous checked state on focus for login guard
+      checkbox.addEventListener('focusin', () => {
+        checkbox.dataset.prevChecked = checkbox.checked.toString();
+      });
+
+      checkbox.addEventListener('change', async (e) => {
+        const allowed = await requireLoginGuard(e, checkbox);
+        if (!allowed) return;
+
         const isRibbed = e.target.checked;
         debugLog(`Ribbed collar checkbox changed: ${isRibbed}`);
 
@@ -1240,6 +1275,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (window.jerseyViewer) {
           window.jerseyViewer.toggleCollarNormalMaps(isRibbed);
         }
+        markDesignDirty();
       });
     }
   });
@@ -1299,7 +1335,23 @@ function initializeColorsSelectDropdown() {
     }, 200);
   });
 
-  selectInput.addEventListener('change', function () {
+  // Store previous value on focus for login guard
+  selectInput.addEventListener('focusin', () => {
+    selectInput.dataset.prevValue = selectInput.value;
+  });
+
+  selectInput.addEventListener('change', async function (e) {
+    const allowed = await requireLoginGuard(e, selectInput);
+    if (!allowed) {
+      setTimeout(() => {
+        isSelectOpen = false;
+        customizationPanel.classList.remove('select-open');
+      }, 150);
+      return;
+    }
+
+    markDesignDirty();
+
     setTimeout(() => {
       isSelectOpen = false;
       customizationPanel.classList.remove('select-open');
@@ -1394,6 +1446,8 @@ if (logoUpload) {
     const file = e.target.files[0];
     if (file) {
       handleLogoFile(file, false);
+      // Reset input value to allow re-uploading the same file
+      e.target.value = '';
     }
   });
 }
@@ -1404,6 +1458,8 @@ if (logoUploadColors) {
     const file = e.target.files[0];
     if (file) {
       handleLogoFile(file, true);
+      // Reset input value to allow re-uploading the same file
+      e.target.value = '';
     }
   });
 }
@@ -1451,8 +1507,9 @@ async function uploadLogoToSupabase(file) {
       throw new Error('Supabase client not available');
     }
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (!user || userError) {
+    // Use cached auth user to avoid repeated Supabase calls
+    const user = await (window.getCachedAuthUser ? window.getCachedAuthUser() : supabase.auth.getUser().then(({ data }) => data.user));
+    if (!user) {
       console.error('No user logged in');
       if (window.hideLoading) window.hideLoading();
       if (window.showLoginModal) {
@@ -1553,9 +1610,99 @@ function resizeImage(file) {
 }
 
 // ==================== SVG COLOR DETECTION ====================
+
+/**
+ * Loads design color override from design-colors.json (cached)
+ * @param {string} svgPath - Optional SVG path to look up override for
+ * @returns {Promise<Array|null>} Array of color objects if override exists, null otherwise
+ */
+async function getDesignColorOverride(svgPath) {
+  // Use provided path or fall back to global
+  const pathToCheck = svgPath || window.jerseyViewer?.currentSVGPath;
+  if (!pathToCheck) return null;
+
+  // Extract family/design from path (e.g., "../designs/svg/graphic/rush/..." → family="graphic", design="rush")
+  const match = pathToCheck.match(/designs\/svg\/([^/]+)\/([^/]+)\//);
+  if (!match) return null;
+
+  const family = match[1];
+  const design = match[2];
+
+  // Load override file (cached)
+  if (!window._designColorsCache) {
+    // Try multiple paths to support index.html, admin-design/index.html, and share/index.html
+    const pathsToTry = [
+      './designs/design-colors - override.json',           // From jersey-configurator/index.html
+      '../designs/design-colors - override.json',          // From jersey-configurator/admin-design/index.html or share/index.html
+      '../../designs/design-colors - override.json'        // Fallback for nested paths
+    ];
+
+    for (const path of pathsToTry) {
+      try {
+        const response = await fetch(path);
+        if (response.ok) {
+          window._designColorsCache = await response.json();
+          debugLog('📋 Loaded design-colors.json:', window._designColorsCache);
+          break;
+        }
+      } catch (e) {
+        // Try next path
+      }
+    }
+
+    // If all paths failed, use empty cache (auto-detection)
+    if (!window._designColorsCache) {
+      debugLog('⚠️ No design-colors.json found, using auto-detection');
+      window._designColorsCache = {};
+    }
+  }
+
+  // Hierarchical lookup: family > design
+  const override = window._designColorsCache[family]?.[design];
+  if (override) {
+    debugLog(`✅ Found color override for ${family}/${design}:`, override);
+  }
+  return override || null;
+}
+
+/**
+ * Normalizes CSS color names to hex codes
+ * @param {string} color - Color value (hex, named, or RGB)
+ * @returns {string} Normalized hex color code
+ */
+function normalizeColorToHex(color) {
+  // Already a hex code - return as-is (will be normalized later for 3-char format)
+  if (color.startsWith('#')) {
+    return color;
+  }
+
+  // Common CSS named colors to hex mapping
+  const colorMap = {
+    'gold': '#ffd700',
+    'silver': '#c0c0c0',
+    'white': '#ffffff',
+    'black': '#000000',
+    'red': '#ff0000',
+    'green': '#008000',
+    'blue': '#0000ff',
+    'yellow': '#ffff00',
+    'cyan': '#00ffff',
+    'magenta': '#ff00ff',
+    'orange': '#ffa500',
+    'purple': '#800080',
+    'pink': '#ffc0cb',
+    'brown': '#a52a2a',
+    'gray': '#808080',
+    'grey': '#808080'
+  };
+
+  return colorMap[color] || color;
+}
+
 /**
  * Detects SVG classes and their colors from CSS style blocks, sorted by dominance
  * Also extracts gradient stop-colors from linearGradient and radialGradient elements
+ * Checks for manual overrides in design-colors.json first
  * @param {SVGElement|string} svgElement - SVG DOM element or SVG string
  * @returns {Array<Object>} Array of class info objects with {className, color, dominance, elementCount, isGradient, gradientIds}
  */
@@ -1587,14 +1734,17 @@ function detectUniqueColors(svgElement) {
     const cssContent = styleMatch[1];
 
     // Extract class definitions with fill colors
-    // Matches patterns like: .st0{...fill:#FFD700...} or .st2{...fill:#2698D1...}
-    // This regex matches single-class selectors only for backward compatibility
-    const fillClassRegex = /\.([a-zA-Z0-9_-]+)\s*\{[^}]*fill:\s*([#a-fA-F0-9]+)[^}]*\}/g;
+    // Matches patterns like: .st0{...fill:#FFD700...} or .st2{...fill:gold...}
+    // Updated regex to capture hex codes AND named colors (like 'gold', 'red', etc.)
+    const fillClassRegex = /\.([a-zA-Z0-9_-]+)\s*\{[^}]*fill:\s*([^;}\s]+)[^}]*\}/g;
 
     let match;
     while ((match = fillClassRegex.exec(cssContent)) !== null) {
       const className = match[1];
-      let color = match[2].toLowerCase();
+      let color = match[2].trim().toLowerCase();
+
+      // Normalize named colors to hex (e.g., 'gold' -> '#ffd700')
+      color = normalizeColorToHex(color);
 
       // Normalize 3-char hex to 6-char (e.g., #fff -> #ffffff)
       if (/^#[a-fA-F0-9]{3}$/.test(color)) {
@@ -1617,12 +1767,16 @@ function detectUniqueColors(svgElement) {
     }
 
     // Also extract class definitions with stroke colors
-    // Matches patterns like: .st1{...stroke:#80C692...} or .st2{stroke:#FFFFFF;...}
-    const strokeClassRegex = /\.([a-zA-Z0-9_-]+)\s*\{[^}]*stroke:\s*([#a-fA-F0-9]+)[^}]*\}/g;
+    // Matches patterns like: .st1{...stroke:#80C692...} or .st2{stroke:red;...}
+    // Updated to capture both hex codes AND named colors
+    const strokeClassRegex = /\.([a-zA-Z0-9_-]+)\s*\{[^}]*stroke:\s*([^;}\s]+)[^}]*\}/g;
 
     while ((match = strokeClassRegex.exec(cssContent)) !== null) {
       const className = match[1];
-      let color = match[2].toLowerCase();
+      let color = match[2].trim().toLowerCase();
+
+      // Normalize named colors to hex (e.g., 'gold' -> '#ffd700')
+      color = normalizeColorToHex(color);
 
       // Normalize 3-char hex to 6-char (e.g., #fff -> #ffffff)
       if (/^#[a-fA-F0-9]{3}$/.test(color)) {
@@ -1859,14 +2013,72 @@ function detectUniqueColors(svgElement) {
   // This ensures colors are always mapped the same way
   classArray.sort((a, b) => a.className.localeCompare(b.className));
 
+  // SPECIAL CASE: Onyx design - only detect st3, st13, st8, st9
+  // Check if this is an Onyx design by examining the currentDesign path
+  const isOnyxDesign = window.currentDesign && window.currentDesign.includes('/onyx/');
+
+  if (isOnyxDesign) {
+    const onyxAllowedClasses = ['st3', 'st13', 'st8', 'st9'];
+    const originalCount = classArray.length;
+
+    classArray = classArray.filter(classInfo =>
+      onyxAllowedClasses.includes(classInfo.className)
+    );
+
+    debugLog(`🎯 Onyx special case: Filtered from ${originalCount} to ${classArray.length} classes`);
+    debugLog(`   Kept classes: ${classArray.map(c => c.className).join(', ')}`);
+  }
+
   debugLog('✅ Detected SVG classes (alphabetically sorted):', classArray.map(c => c.className));
   debugLog('Detected SVG classes by className:', classArray);
 
   return classArray;
 }
 
-// Make function available globally for use in other scripts
+/**
+ * Async wrapper that checks for override first, then falls back to auto-detection
+ * @param {SVGElement|string} svgElement - SVG DOM element or SVG string
+ * @param {string} svgPath - Optional SVG path for override lookup
+ * @returns {Promise<Array<Object>>} Array of class info objects
+ */
+async function detectUniqueColorsWithOverride(svgElement, svgPath) {
+  // Check if overrides are enabled globally
+  if (window.USE_DESIGN_OVERRIDES === false) {
+    debugLog('⚠️ Design overrides disabled globally - using auto-detection');
+    return detectUniqueColors(svgElement);
+  }
+
+  // DISABLED: Color override functionality - using auto-detection only
+  // Check for manual override first
+  const override = await getDesignColorOverride(svgPath);
+
+  if (override && Array.isArray(override)) {
+    debugLog('🎯 Using manual color override instead of auto-detection');
+
+    // Enrich override colors with derived flags (use explicit if provided, else derive)
+    return override.map((item, index) => {
+      const derivedIsGradient = item.className.startsWith('__gradient_color_');
+      return {
+        className: item.className,
+        color: item.color,
+        elementCount: 1,
+        totalArea: 100,
+        dominance: 100 - index, // Maintain override order
+        isGradient: item.isGradient !== undefined ? item.isGradient : derivedIsGradient,
+        gradientIds: item.gradientIds || [],
+        isMerged: item.isMerged || false,
+        shouldSkip: item.shouldSkip || false
+      };
+    });
+  }
+
+  // Always use auto-detection
+  return detectUniqueColors(svgElement);
+}
+
+// Make functions available globally for use in other scripts
 window.detectUniqueColors = detectUniqueColors;
+window.detectUniqueColorsWithOverride = detectUniqueColorsWithOverride;
 
 /**
  * Populates the color-selection-group with dynamic color pickers based on detected SVG classes
@@ -1886,18 +2098,32 @@ function populateColorPickers(classArray) {
   // Store class information for mapping (used when updating SVG)
   window.currentSVGClassMap = {};
 
+  // Track visible color count for sequential labeling
+  let visibleColorCount = 0;
+
   // Generate color picker for each detected class
   classArray.forEach((classInfo, index) => {
     const pickerId = `svg-class-${index}`;
 
     // Store class information (including gradient info if available)
+    // Always store in map for index alignment (even if skipped in UI)
     window.currentSVGClassMap[pickerId] = {
       className: classInfo.className,
       originalColor: classInfo.color,
       isGradient: classInfo.isGradient || false,
       gradientIds: classInfo.gradientIds || [],
-      isMerged: classInfo.isMerged || false  // Track if color appears in both CSS and gradients
+      isMerged: classInfo.isMerged || false,  // Track if color appears in both CSS and gradients
+      shouldSkip: classInfo.shouldSkip || false  // Track if should be hidden from UI
     };
+
+    // Skip UI generation for items marked with shouldSkip
+    if (classInfo.shouldSkip) {
+      debugLog(`⏭️ Skipping UI for ${classInfo.className} (shouldSkip: true)`);
+      return;
+    }
+
+    // Increment visible color counter for non-skipped items
+    visibleColorCount++;
 
     // Create color option item
     const colorItem = document.createElement('div');
@@ -1919,8 +2145,8 @@ function populateColorPickers(classArray) {
     label.htmlFor = pickerId;
     label.className = 'color-label-text';
 
-    // Standardize naming to "Color X" for consistency
-    const colorLabel = `Color ${index + 1}`;
+    // Use sequential numbering for visible colors
+    const colorLabel = `Color ${visibleColorCount}`;
 
     const labelTextEn = document.createElement('span');
     labelTextEn.setAttribute('data-en', '');
@@ -1928,25 +2154,37 @@ function populateColorPickers(classArray) {
 
     const labelTextFr = document.createElement('span');
     labelTextFr.setAttribute('data-fr', '');
-    labelTextFr.textContent = `Couleur ${index + 1}`;
+    labelTextFr.textContent = `Couleur ${visibleColorCount}`;
 
     label.appendChild(labelTextEn);
     label.appendChild(labelTextFr);
 
+    // Store original color on focus for login guard
+    colorInput.addEventListener('focusin', () => {
+      colorInput.dataset.prevValue = colorInput.value;
+    });
+
     // Color update handler (shared by both events)
-    const handleColorUpdate = (e) => {
+    const handleColorUpdate = async (e) => {
+      const allowed = await requireLoginGuard(e, colorInput);
+      if (!allowed) return;
+
       const className = e.target.dataset.className;
       const newColor = e.target.value;
 
       // Update the SVG color by class
       updateSVGColorByClass(className, newColor);
+      markDesignDirty();
     };
 
     // Real-time updates while dragging (input event)
     colorInput.addEventListener('input', handleColorUpdate);
 
     // Final update when color picker closes (change event)
-    colorInput.addEventListener('change', (e) => {
+    colorInput.addEventListener('change', async (e) => {
+      const allowed = await requireLoginGuard(e, colorInput);
+      if (!allowed) return;
+
       const className = e.target.dataset.className;
       const oldColor = e.target.dataset.originalColor;
       const newColor = e.target.value;
@@ -1956,6 +2194,7 @@ function populateColorPickers(classArray) {
       // Update the stored original color to the new color
       e.target.dataset.originalColor = newColor;
       window.currentSVGClassMap[pickerId].originalColor = newColor;
+      markDesignDirty();
     });
 
     // Append elements
@@ -2079,7 +2318,8 @@ function updateSVGColorByClass(className, newColor, skipRasterize = false) {
     const pickerId = Object.keys(window.currentSVGClassMap || {}).find(
       id => window.currentSVGClassMap[id].className === className
     );
-    const originalColor = pickerId ? window.currentSVGClassMap[pickerId].originalColor : null;
+    const classInfo = pickerId ? window.currentSVGClassMap[pickerId] : null;
+    const originalColor = classInfo ? classInfo.originalColor : null;
 
     if (!originalColor) {
       console.warn(`Could not find original color for gradient class ${className}`);
@@ -2119,6 +2359,33 @@ function updateSVGColorByClass(className, newColor, skipRasterize = false) {
 
     debugLog(`[DEBUG] Updated ${updatedCount} gradient stops from ${originalColor} to ${newColor}`);
 
+    // NEW: If isMerged, also update all CSS fill rules that use this color
+    // This handles solid-filled elements like .st48/.st49 for gray and .st74/.st75 for red
+    if (classInfo && classInfo.isMerged) {
+      const styleElement = svgElement.querySelector('style');
+      if (styleElement) {
+        let cssContent = styleElement.textContent;
+
+        // Normalize original color for regex matching
+        let origColorNorm = originalColor.toLowerCase();
+        if (/^#[a-fA-F0-9]{3}$/.test(origColorNorm)) {
+          origColorNorm = '#' + origColorNorm[1] + origColorNorm[1] + origColorNorm[2] + origColorNorm[2] + origColorNorm[3] + origColorNorm[3];
+        }
+
+        // Escape for regex
+        const escapedOrig = origColorNorm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        // Update all fill properties that match this color
+        const fillRegex = new RegExp(`(fill:\\s*)(${escapedOrig})`, 'gi');
+        const newCssContent = cssContent.replace(fillRegex, (match, prefix) => `${prefix}${newColor}`);
+
+        if (newCssContent !== cssContent) {
+          styleElement.textContent = newCssContent;
+          debugLog(`[DEBUG] ✅ Updated CSS fill rules for merged gradient color ${originalColor} → ${newColor}`);
+        }
+      }
+    }
+
     // Update the stored original color so subsequent changes work correctly
     if (pickerId && window.currentSVGClassMap[pickerId]) {
       window.currentSVGClassMap[pickerId].originalColor = newColor;
@@ -2139,6 +2406,7 @@ function updateSVGColorByClass(className, newColor, skipRasterize = false) {
     return;
   }
 
+
   // Standard handling for CSS class-based colors
   // Find and update the style block
   const styleElement = svgElement.querySelector('style');
@@ -2157,8 +2425,9 @@ function updateSVGColorByClass(className, newColor, skipRasterize = false) {
   const propertyName = isStrokeColor ? 'stroke' : 'fill';
 
   // Update the color for this class
-  // Match patterns like: .st0{...fill:#FFD700...} or .st2{stroke:#FFFFFF;...}
-  const classRegex = new RegExp(`(\\.${actualClassName}\\s*\\{[^}]*${propertyName}:\\s*)([#a-fA-F0-9]+)([^}]*\\})`, 'g');
+  // Match patterns like: .st0{...fill:#FFD700...} or .st2{stroke:gold;...} or .st9{fill:gold}
+  // Updated regex to capture both hex codes AND named colors
+  const classRegex = new RegExp(`(\\.${actualClassName}\\s*\\{[^}]*${propertyName}:\\s*)([^;}\s]+)([^}]*\\})`, 'g');
 
   const updatedCSS = cssContent.replace(classRegex, (match, before, oldColor, after) => {
     debugLog(`  Replacing ${oldColor} with ${newColor} in class .${actualClassName} (${propertyName})`);
@@ -2179,6 +2448,23 @@ function updateSVGColorByClass(className, newColor, skipRasterize = false) {
 
     // Find the original color to replace in gradients
     const originalColor = classInfo.originalColor;
+
+    // NEW: Also update any CSS classes using the original color as fill
+    // This ensures solid elements (like st49) update along with gradient elements
+    if (styleElement) {
+      const currentStyle = styleElement.textContent;
+      // Escape for regex to handle potential special chars
+      const escapedOrig = originalColor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const fillRegex = new RegExp(`(fill:\\s*)(${escapedOrig})`, 'gi');
+
+      if (fillRegex.test(currentStyle)) {
+        const newStyle = currentStyle.replace(fillRegex, (match, prefix) => `${prefix}${newColor}`);
+        if (newStyle !== currentStyle) {
+          styleElement.textContent = newStyle;
+          debugLog(`✅ Updated global CSS fills for merged color ${originalColor} to ${newColor}`);
+        }
+      }
+    }
 
     // Update gradient stops
     const gradientStops = svgElement.querySelectorAll('linearGradient stop, radialGradient stop');
@@ -2238,15 +2524,26 @@ window.updateSVGColorByClass = updateSVGColorByClass;
 function captureCurrentDesignColors() {
   const colors = [];
 
-  // Get all color pickers in order
-  const colorPickers = document.querySelectorAll('#color-selection-group .color-picker-input');
+  // Iterate over ALL colors (including skipped ones) to maintain index alignment
+  if (window.currentSVGColors && window.currentSVGColors.length > 0) {
+    window.currentSVGColors.forEach((classInfo, index) => {
+      const pickerId = `svg-class-${index}`;
+      const picker = document.getElementById(pickerId);
 
-  colorPickers.forEach(picker => {
-    colors.push(picker.value); // Hex color like "#FFD700"
-  });
+      // If picker exists (not skipped), get its current value
+      // If skipped, use the original color from classInfo
+      const color = picker ? picker.value : classInfo.color;
+      colors.push(color);
+    });
+  } else {
+    // Fallback: use visible pickers only (old behavior)
+    const colorPickers = document.querySelectorAll('#color-selection-group .color-picker-input');
+    colorPickers.forEach(picker => {
+      colors.push(picker.value);
+    });
+  }
 
-  debugLog(`📸 Capturing ${colorPickers.length} color pickers, got ${colors.length} colors:`, colors);
-  debugLog(`📸 Captured ${colors.length} design colors:`, colors);
+  debugLog(`📸 Captured ${colors.length} design colors (including skipped):`, colors);
   return colors;
 }
 
@@ -2254,7 +2551,7 @@ function captureCurrentDesignColors() {
  * Restores saved design colors to the SVG and updates the UI
  * @param {Array<string>} designColors - Array of hex color strings
  */
-function restoreDesignColors(designColors) {
+async function restoreDesignColors(designColors) {
   debugLog('🎨 restoreDesignColors() called with:', designColors);
   debugLog('🎨 restoreDesignColors() called with:', designColors);
 
@@ -2270,7 +2567,15 @@ function restoreDesignColors(designColors) {
   // that no longer exist in the fresh DOM (e.g. Map has red, DOM resets to black).
   if (window.jerseyViewer && window.jerseyViewer.currentSVGElement) {
     debugLog('🔄 Forcing map rebuild in restoreDesignColors for synchronization');
-    const detectedColors = detectUniqueColors(window.jerseyViewer.currentSVGElement);
+
+    // CRITICAL FIX: Use detectUniqueColorsWithOverride to respect design-colors.json
+    // This ensures saved colors map to the correct classes defined in the override
+    const svgPath = window.jerseyViewer.currentSVGPath || window.currentDesign;
+    const detectedColors = await detectUniqueColorsWithOverride(
+      window.jerseyViewer.currentSVGElement,
+      svgPath
+    );
+
     window.currentSVGColors = detectedColors;
 
     window.currentSVGClassMap = {};
@@ -2724,7 +3029,8 @@ async function checkDesignNameExists(designName) {
       console.error('Supabase client not available');
       return false;
     }
-    const { data: { user } } = await supabase.auth.getUser();
+    // Use cached auth user to avoid repeated Supabase calls
+    const user = await (window.getCachedAuthUser ? window.getCachedAuthUser() : supabase.auth.getUser().then(({ data }) => data.user));
     if (!user) {
       return false;
     }
@@ -2754,8 +3060,9 @@ async function uploadThumbnailAndSaveDesign(designName) {
       throw new Error('Supabase client not available');
     }
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (!user || userError) {
+    // Use cached auth user to avoid repeated Supabase calls
+    const user = await (window.getCachedAuthUser ? window.getCachedAuthUser() : supabase.auth.getUser().then(({ data }) => data.user));
+    if (!user) {
       if (window.hideLoading) window.hideLoading();
       return {
         success: false,
@@ -2987,7 +3294,8 @@ async function updateExistingDesign(designId, designName) {
       throw new Error('Supabase client not available');
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
+    // Use cached auth user to avoid repeated Supabase calls
+    const user = await (window.getCachedAuthUser ? window.getCachedAuthUser() : supabase.auth.getUser().then(({ data }) => data.user));
     if (!user) {
       return {
         success: false,
@@ -3083,7 +3391,8 @@ async function saveDesign() {
       throw new Error('Supabase client not available');
     }
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    // Use cached auth user to avoid repeated Supabase calls
+    const user = await (window.getCachedAuthUser ? window.getCachedAuthUser() : supabase.auth.getUser().then(({ data }) => data.user));
 
     if (isSharedDesign || (!isInitialSave && currentDesignName && currentDesignId)) {
       // Check if the design has been ordered
@@ -3230,7 +3539,8 @@ if (mainSaveButton) {
     } else {
       const supabase = getSupabaseClient();
       if (supabase) {
-        const { data: { user } } = await supabase.auth.getUser();
+        // Use cached auth user to avoid repeated Supabase calls
+        const user = await (window.getCachedAuthUser ? window.getCachedAuthUser() : supabase.auth.getUser().then(({ data }) => data.user));
         isLoggedIn = user !== null;
       }
     }
@@ -3259,7 +3569,8 @@ if (saveAsButton) {
     } else {
       const supabase = getSupabaseClient();
       if (supabase) {
-        const { data: { user } } = await supabase.auth.getUser();
+        // Use cached auth user to avoid repeated Supabase calls
+        const user = await (window.getCachedAuthUser ? window.getCachedAuthUser() : supabase.auth.getUser().then(({ data }) => data.user));
         isLoggedIn = user !== null;
       }
     }
@@ -3567,13 +3878,13 @@ function loadJerseyConfiguration(isSavedDesign) {
             try {
               const response = await fetch(currentDesign);
               const svgText = await response.text();
-              const detectedColors = detectUniqueColors(svgText);
+              const detectedColors = await detectUniqueColorsWithOverride(svgText, currentDesign);
 
               if (hasSavedColors) {
                 // Use saved colors with detected class names
                 debugLog('📦 Mapping saved colors to detected classes');
                 window.currentSVGColors = detectedColors.map((item, index) => ({
-                  className: item.className,
+                  ...item,  // Preserve all flags (shouldSkip, isGradient, isMerged, etc.)
                   color: config.design.designColors[index] || item.color
                 }));
                 debugLog('✅ Mapped colors:', window.currentSVGColors);
@@ -3593,11 +3904,11 @@ function loadJerseyConfiguration(isSavedDesign) {
             // Set up event listener BEFORE calling showDesignCustomization
             if (hasSavedColors) {
               debugLog('🔧 Setting up colorPickersReady listener');
-              const colorRestoreHandler = () => {
+              const colorRestoreHandler = async () => {
                 // Wait for SVG to load before restoring colors
-                setTimeout(() => {
+                setTimeout(async () => {
                   debugLog('🔄 Applying saved colors to SVG...');
-                  restoreDesignColors(config.design.designColors);
+                  await restoreDesignColors(config.design.designColors);
                   // After colors are restored, mark clean and re-enable dirty tracking
                   // This happens after restoreDesignColors completes (which sets color picker values)
                   if (isSavedDesign) {
@@ -3883,7 +4194,8 @@ async function detectSharedDesign() {
 
           // Set state variables for save functionality
           // Check if the current user owns this design
-          const { data: { user } } = await supabase.auth.getUser();
+          // Use cached auth user to avoid repeated Supabase calls
+          const user = await (window.getCachedAuthUser ? window.getCachedAuthUser() : supabase.auth.getUser().then(({ data }) => data.user));
           if (user) {
             // Check ownership
             const { data: ownerData } = await supabase

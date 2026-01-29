@@ -8,33 +8,35 @@
   "designOrder": {
     "graphic": [
       "concrete",
+      "elite",
+      "fury",
+      "ignite",
+      "kickoff",
       "monarch",
       "pulse",
-      "royal",
       "rush",
-      "signature",
       "vortex"
     ],
     "jacquard": [
       "classic",
       "crest",
       "echo",
-      "legacy",
       "prime"
     ],
     "stripes": [
       "captain",
       "derby",
+      "flux",
       "milano",
       "onyx",
-      "prism"
+      "prism",
+      "royal",
+      "signature"
     ],
     "uni_design": [
       "asphalt",
       "blaze",
-      "flux",
       "glitch",
-      "ignite",
       "ironclad",
       "raptor",
       "revolt",

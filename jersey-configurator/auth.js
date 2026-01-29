@@ -32,10 +32,62 @@ function getCurrentLanguage() {
   return localStorage.getItem("language") || "en"
 }
 
-// Check if user logged in
+// Cached auth state to prevent repeated Supabase calls
+let cachedAuthState = {
+  user: null,        // cached user object (null = not checked yet or not logged in)
+  isLoggedIn: null,  // null = not checked yet, true/false = cached value
+  isChecking: false  // flag to prevent concurrent checks
+};
+
+// Check if user logged in (uses cached value if available)
 async function checkUserLoggedIn() {
-  const { data: { user } } = await supabase.auth.getUser();
-  return user !== null;
+  // Return cached value if available
+  if (cachedAuthState.isLoggedIn !== null) {
+    return cachedAuthState.isLoggedIn;
+  }
+  
+  // Prevent concurrent checks
+  if (cachedAuthState.isChecking) {
+    // Wait for ongoing check to complete
+    while (cachedAuthState.isChecking) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    return cachedAuthState.isLoggedIn;
+  }
+  
+  // Perform the check
+  cachedAuthState.isChecking = true;
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    cachedAuthState.user = user;
+    cachedAuthState.isLoggedIn = user !== null && !error;
+    return cachedAuthState.isLoggedIn;
+  } catch (error) {
+    cachedAuthState.user = null;
+    cachedAuthState.isLoggedIn = false;
+    return false;
+  } finally {
+    cachedAuthState.isChecking = false;
+  }
+}
+
+// Get user (uses cached value if available, otherwise fetches)
+async function getCachedAuthUser() {
+  // If we have a cached value, return it
+  if (cachedAuthState.isLoggedIn !== null) {
+    return cachedAuthState.user;
+  }
+  
+  // Otherwise, check and cache
+  await checkUserLoggedIn();
+  return cachedAuthState.user;
+}
+
+// Function to invalidate auth cache (call after login/logout)
+function invalidateAuthCache() {
+  cachedAuthState.user = null;
+  cachedAuthState.isLoggedIn = null;
+  cachedAuthState.isChecking = false;
 }
 
 // Handle create account form submission
@@ -129,6 +181,7 @@ if (loginForm) {
       if (error) throw error;
 
       console.log('Login successful:', data.user);
+      invalidateAuthCache(); // Invalidate cache after login
       closeAllModals();
       await updateUIBasedOnLoginStatus();
       window.location.reload();
@@ -455,6 +508,7 @@ document.addEventListener('click', async (e) => {
       if (error) throw error;
 
       console.log('Logged out successfully');
+      invalidateAuthCache(); // Invalidate cache after logout
       await updateUIBasedOnLoginStatus();
       // Stay on the current page (jersey-configurator/index.html)
       window.location.reload();
@@ -779,8 +833,10 @@ window.showUnsavedConfirm = showUnsavedConfirm;
 // Global translated alert method
 window.translatedAlert = showTranslatedAlert
 
-// Make checkUserLoggedIn available globally
+// Make checkUserLoggedIn, getCachedAuthUser, and invalidateAuthCache available globally
 window.checkUserLoggedIn = checkUserLoggedIn;
+window.getCachedAuthUser = getCachedAuthUser;
+window.invalidateAuthCache = invalidateAuthCache;
 window.showLoginModal = showLoginModal;
 
 // Loading animation functions

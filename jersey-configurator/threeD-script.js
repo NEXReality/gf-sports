@@ -912,19 +912,7 @@ class JerseyViewer {
         } else {
             // No intersection with 3D model - deselect all logos to allow OrbitControls
             debugLog(`🔄 Clicked outside 3D model - deselecting logos`);
-
-            // Deselect active objects on all canvases and update textures
-            Object.entries(this.partCanvases).forEach(([partName, canvas]) => {
-                canvas.discardActiveObject();
-                canvas.renderAll();
-                // Update texture to remove selection borders from 3D model
-                this.updateTexture(partName);
-            });
-
-            // Re-enable orbit controls
-            if (this.controls) {
-                this.controls.enabled = true;
-            }
+            this.clearAllLogoSelections();
         }
     }
 
@@ -977,6 +965,27 @@ class JerseyViewer {
 
             this.isDragging = false;
             this.draggedPart = null;
+        }
+    }
+
+    /**
+     * Clear all logo selections across all canvases
+     * Used when clicking outside the 3D model or switching parts
+     */
+    clearAllLogoSelections() {
+        debugLog(`🔄 Clearing all logo selections`);
+
+        // Deselect active objects on all canvases and update textures
+        Object.entries(this.partCanvases).forEach(([partName, canvas]) => {
+            canvas.discardActiveObject();
+            canvas.renderAll();
+            // Update texture to remove selection borders from 3D model
+            this.updateTexture(partName);
+        });
+
+        // Re-enable orbit controls
+        if (this.controls) {
+            this.controls.enabled = true;
         }
     }
 
@@ -2121,6 +2130,17 @@ class JerseyViewer {
 
             // Add logo to canvas as a new layer
             fabricCanvas.add(img);
+
+            // Clear active selections on ALL other canvases to remove blue borders
+            // This ensures that when uploading to a different part, the old logo is fully deselected
+            Object.entries(this.partCanvases).forEach(([partName, canvas]) => {
+                if (canvas !== fabricCanvas) {
+                    canvas.discardActiveObject();
+                    canvas.renderAll(); // Force re-render to clear visual borders
+                }
+            });
+
+            // Set the newly uploaded logo as active
             fabricCanvas.setActiveObject(img);
 
             // Store reference to the logo for UI controls
@@ -3239,8 +3259,10 @@ class JerseyViewer {
         const originalAspect = this.camera.aspect;
         const originalBackground = this.scene.background;
         const originalGroundPlaneVisible = this.groundPlane ? this.groundPlane.visible : false;
-        const originalWidth = this.renderer.domElement.width;
-        const originalHeight = this.renderer.domElement.height;
+
+        // Use getSize() to get actual display size (not canvas buffer size with devicePixelRatio)
+        const originalSize = new THREE.Vector2();
+        this.renderer.getSize(originalSize);
 
         // Save original clear color and alpha (design-viewer approach)
         const originalClearColor = this.renderer.getClearColor(new THREE.Color());
@@ -3301,8 +3323,8 @@ class JerseyViewer {
         this.renderer.setClearColor(originalClearColor, originalClearAlpha);
 
         // Restore original renderer size
-        this.renderer.setSize(originalWidth, originalHeight);
-        this.camera.aspect = originalWidth / originalHeight;
+        this.renderer.setSize(originalSize.x, originalSize.y);
+        this.camera.aspect = originalSize.x / originalSize.y;
         this.camera.updateProjectionMatrix();
 
         // Re-render with original settings
@@ -3645,11 +3667,32 @@ function initViewer() {
 
     partSelectors.forEach(selector => {
         if (selector) {
-            selector.addEventListener('change', (event) => {
+            // Store previous value on focus for login guard
+            selector.addEventListener('focusin', () => {
+                selector.dataset.prevValue = selector.value;
+            });
+
+            selector.addEventListener('change', async (event) => {
+                // Check login guard for jersey-part-select-working (upload image dropdown)
+                if (selector.id === 'jersey-part-select-working') {
+                    if (window.requireLoginGuard) {
+                        const allowed = await window.requireLoginGuard(event, selector);
+                        if (!allowed) return;
+                    }
+
+                    // Mark design as dirty if login guard passes
+                    if (window.markDesignDirty) {
+                        window.markDesignDirty();
+                    }
+                }
+
                 const selectedPart = event.target.value;
                 debugLog(`Part changed to: ${selectedPart}`);
                 jerseyViewer.currentPart = selectedPart;
                 jerseyViewer.switchDebugCanvas(selectedPart);
+
+                // Clear all logo selections when switching parts
+                jerseyViewer.clearAllLogoSelections();
 
                 // Animate camera to the selected part's position
                 jerseyViewer.animateCameraToPart(selectedPart);
