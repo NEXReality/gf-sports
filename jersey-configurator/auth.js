@@ -36,7 +36,10 @@ function getCurrentLanguage() {
 let cachedAuthState = {
   user: null,        // cached user object (null = not checked yet or not logged in)
   isLoggedIn: null,  // null = not checked yet, true/false = cached value
-  isChecking: false  // flag to prevent concurrent checks
+  isChecking: false, // flag to prevent concurrent checks
+  accountStatus: null,   // pending, approved, suspended
+  jerseyAccess: null,    // boolean or null (not checked)
+  socksAccess: null      // boolean or null (not checked)
 };
 
 // Check if user logged in (uses cached value if available)
@@ -88,6 +91,83 @@ function invalidateAuthCache() {
   cachedAuthState.user = null;
   cachedAuthState.isLoggedIn = null;
   cachedAuthState.isChecking = false;
+  cachedAuthState.accountStatus = null;
+  cachedAuthState.jerseyAccess = null;
+  cachedAuthState.socksAccess = null;
+}
+
+// Get account status from profiles table
+async function getAccountStatus() {
+  // Return cached value if available
+  if (cachedAuthState.accountStatus !== null) {
+    return cachedAuthState.accountStatus;
+  }
+  
+  const user = await getCachedAuthUser();
+  if (!user) return 'pending';
+  
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('account_status')
+    .eq('user_id', user.id)
+    .single();
+  
+  if (error || !data) {
+    console.error('Error fetching account status:', error);
+    return 'pending';
+  }
+  
+  cachedAuthState.accountStatus = data.account_status || 'pending';
+  return cachedAuthState.accountStatus;
+}
+
+// Get configurator access (jersey_access, socks_access)
+async function getConfiguratorAccess() {
+  // Return cached values if available
+  if (cachedAuthState.jerseyAccess !== null && cachedAuthState.socksAccess !== null) {
+    return {
+      jersey_access: cachedAuthState.jerseyAccess,
+      socks_access: cachedAuthState.socksAccess
+    };
+  }
+  
+  const user = await getCachedAuthUser();
+  if (!user) {
+    return { jersey_access: false, socks_access: false };
+  }
+  
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('account_status, jersey_access, socks_access')
+    .eq('user_id', user.id)
+    .single();
+  
+  if (error || !data) {
+    console.error('Error fetching configurator access:', error);
+    return { jersey_access: false, socks_access: false };
+  }
+  
+  // Cache all values
+  cachedAuthState.accountStatus = data.account_status || 'pending';
+  cachedAuthState.jerseyAccess = data.jersey_access || false;
+  cachedAuthState.socksAccess = data.socks_access || false;
+  
+  return {
+    jersey_access: cachedAuthState.jerseyAccess,
+    socks_access: cachedAuthState.socksAccess
+  };
+}
+
+// Check if user can access a specific configurator
+async function canAccessConfigurator(type) {
+  const isLoggedIn = await checkUserLoggedIn();
+  if (!isLoggedIn) return false;
+  
+  const status = await getAccountStatus();
+  if (status !== 'approved') return false;
+  
+  const access = await getConfiguratorAccess();
+  return type === 'jersey' ? access.jersey_access : access.socks_access;
 }
 
 // Handle create account form submission
@@ -122,19 +202,45 @@ if (phoneNumberInput) {
   });
 }
 
+// Allow only letters (and space, hyphen, apostrophe for names) in first/last name
+const firstNameInput = document.getElementById('firstName');
+const lastNameInput = document.getElementById('lastName');
+
+function allowAlphabetsOnly(e) {
+  let input = e.target.value;
+  // Keep only A-Z, a-z, space, hyphen, apostrophe
+  input = input.replace(/[^A-Za-z\s\-']/g, '');
+  e.target.value = input;
+}
+
+if (firstNameInput) {
+  firstNameInput.addEventListener('input', allowAlphabetsOnly);
+}
+if (lastNameInput) {
+  lastNameInput.addEventListener('input', allowAlphabetsOnly);
+}
+
 if (createAccountForm) {
   createAccountForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const firstName = document.getElementById('firstName').value;
     const lastName = document.getElementById('lastName').value;
     const phoneNumber = phoneNumberInput.value;
-    const clubName = document.getElementById('clubName').value;
+    const clubNameEl = document.getElementById('clubNameSignup') || document.getElementById('clubName');
+    const clubName = clubNameEl ? clubNameEl.value : '';
+    const distributorNameEl = document.getElementById('distributorNameSignup');
+    const distributorName = distributorNameEl ? distributorNameEl.value.trim() : '';
     const email = document.getElementById('signupEmail').value;
     const password = document.getElementById('signupPassword').value;
 
     // Ensure phone number is valid
     if (!validatePhoneNumber(phoneNumber)) {
       window.translatedAlert('invalid_phone_number', 'Phone number must be 7-15 characters long and contain only numbers, +, -, (, and )');
+      return;
+    }
+
+    if (!distributorName) {
+      window.translatedAlert('distributor_name_required', 'Distributor name is required.');
       return;
     }
 
@@ -147,7 +253,8 @@ if (createAccountForm) {
             first_name: firstName,
             last_name: lastName,
             phone_number: phoneNumber,
-            club_name: clubName
+            club_name: clubName,
+            distributor_name: distributorName
           }
         }
       });
@@ -155,7 +262,7 @@ if (createAccountForm) {
       if (error) throw error;
 
       console.log('Sign up successful:', data);
-      window.translatedAlert('signup_successful');
+      window.translatedAlert('signup_successful_check_email');
       closeAllModals();
     } catch (error) {
       console.error('Error during sign up:', error);
@@ -561,6 +668,10 @@ const alertMessages = {
     'en': 'Invalid phone number',
     'fr': 'Numéro de téléphone invalide'
   },
+  'distributor_name_required': {
+    'en': 'Distributor name is required.',
+    'fr': 'Le nom du distributeur est obligatoire.'
+  },
   'no_user_logged_in': {
     'en': 'Please log in to upload a logo',
     'fr': 'Veuillez vous connecter pour télécharger un logo'
@@ -652,6 +763,42 @@ const alertMessages = {
   'design_already_placed_error': {
     'en': 'This design has already been ordered and cannot be modified. However, you can create a duplicate by using the \'Save As\' option in the Configurator page.',
     'fr': 'Ce modèle a déjà été commandé et ne peut être modifié. Cependant, vous pouvez créer un doublon en utilisant l\'option \'Enregistrer sous\' dans la page Configurateur.'
+  },
+  'login_required_configurator': {
+    'en': 'Please log in to access the configurator.',
+    'fr': 'Veuillez vous connecter pour accéder au configurateur.'
+  },
+  'account_pending_title': {
+    'en': 'Account Pending Approval',
+    'fr': 'Compte en attente d\'approbation'
+  },
+  'account_pending_message': {
+    'en': 'Your account is being reviewed. You\'ll receive an email when approved.',
+    'fr': 'Votre compte est en cours de vérification. Vous recevrez un e-mail une fois approuvé.'
+  },
+  'account_suspended_title': {
+    'en': 'Account Suspended',
+    'fr': 'Compte suspendu'
+  },
+  'account_suspended_message': {
+    'en': 'Your account has been suspended. Contact support if this is an error.',
+    'fr': 'Votre compte a été suspendu. Contactez le support si c\'est une erreur.'
+  },
+  'no_configurator_access_title': {
+    'en': 'Access Not Granted',
+    'fr': 'Accès non accordé'
+  },
+  'no_configurator_access_message': {
+    'en': 'You do not have access to this configurator. Please contact the administrator if you believe this is an error.',
+    'fr': 'Vous n\'avez pas accès à ce configurateur. Veuillez contacter l\'administrateur si vous pensez qu\'il s\'agit d\'une erreur.'
+  },
+  'login_required_title': {
+    'en': 'Login Required',
+    'fr': 'Connexion requise'
+  },
+  'login_required_message': {
+    'en': 'Please log in to access the configurator.',
+    'fr': 'Veuillez vous connecter pour accéder au configurateur.'
   }
 }
 
@@ -838,6 +985,11 @@ window.checkUserLoggedIn = checkUserLoggedIn;
 window.getCachedAuthUser = getCachedAuthUser;
 window.invalidateAuthCache = invalidateAuthCache;
 window.showLoginModal = showLoginModal;
+
+// Make account status and configurator access functions available globally
+window.getAccountStatus = getAccountStatus;
+window.getConfiguratorAccess = getConfiguratorAccess;
+window.canAccessConfigurator = canAccessConfigurator;
 
 // Loading animation functions
 function showLoading() {

@@ -9,14 +9,14 @@
     <meta name="title" content="Reset password">
     <meta name="keywords" content="3D socks configurator, 3D jersey configurator, custom socks designer, custom jersey designer, 3D custom socks, 3D custom jersey, online socks configurator, online jersey configurator, socks design tool, jersey design tool, personalized socks maker, personalized jersey maker, sportswear configurator, teamwear configurator, 3D apparel configurator, interactive socks designer, interactive jersey designer, custom sportswear generator, socks customization software, jersey customization software">
     <meta name="description" content="Design custom socks and jerseys in real time using an interactive 3D configurator. Create, personalize, visualize, and order sportswear online with ease.">
-    <link rel="canonical" href="http://gf-sports.fr/">
+    <link rel="canonical" href="https://gf-sports.fr/">
     <meta property="og:image" content="https://raw.githubusercontent.com/NEXReality/gf-sports/f21e7793d8760a22db11893ff94582c4a0868479/images/og_image.jpg">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="http://gf-sports.fr/">
+    <meta property="og:url" content="https://gf-sports.fr/">
     <meta property="og:title" content="GF Sports">
     <meta property="og:description" content="Design custom socks and jerseys in real time using an interactive 3D configurator. Create, personalize, visualize, and order sportswear online with ease.">
     <meta name="twitter:title" content="GF Sports">
-    <meta name="twitter:url" content="http://gf-sports.fr/">
+    <meta name="twitter:url" content="https://gf-sports.fr/">
     <meta name="twitter:description" content="Design custom socks and jerseys in real time using an interactive 3D configurator. Create, personalize, visualize, and order sportswear online with ease.">
     <meta name="twitter:image" content="https://raw.githubusercontent.com/NEXReality/gf-sports/f21e7793d8760a22db11893ff94582c4a0868479/images/og_image.jpg">
     <meta name="twitter:card" content="summary">
@@ -45,27 +45,36 @@
     <div class="modal-overlay" style="display: flex;">
         <div class="modal">
             <div class="modal-content">
-                <h2 class="modal-title" data-en="Change Password" data-fr="Changer le mot de passe">Change Password</h2>
+                <h2 class="modal-title">
+                    <span data-en>Change Password</span>
+                    <span data-fr>Changer le mot de passe</span>
+                </h2>
                 <form id="changePasswordForm" class="login-form">
                     <div class="form-group">
-                        <label for="newPassword" data-en="New Password" data-fr="Nouveau mot de passe">New
-                            Password</label>
+                        <label for="newPassword">
+                            <span data-en>New Password</span>
+                            <span data-fr>Nouveau mot de passe</span>
+                        </label>
                         <input type="password" id="newPassword" placeholder="Enter new password"
-                            data-fr-placeholder="Entrez le nouveau mot de passe" required>
+                            data-en-placeholder="Enter new password" data-fr-placeholder="Entrez le nouveau mot de passe" required>
                     </div>
                     <div class="form-group">
-                        <label for="confirmPassword" data-en="Confirm New Password"
-                            data-fr="Confirmer le nouveau mot de passe">Confirm New Password</label>
+                        <label for="confirmPassword">
+                            <span data-en>Confirm New Password</span>
+                            <span data-fr>Confirmer le nouveau mot de passe</span>
+                        </label>
                         <input type="password" id="confirmPassword" placeholder="Confirm new password"
-                            data-fr-placeholder="Confirmez le nouveau mot de passe" required>
+                            data-en-placeholder="Confirm new password" data-fr-placeholder="Confirmez le nouveau mot de passe" required>
                     </div>
                     <div id="passwordMismatch" class="error-message"
-                        style="display: none; color: #e53e3e; font-size: 0.875rem; margin-bottom: 1rem;"
-                        data-en="Passwords do not match" data-fr="Les mots de passe ne correspondent pas">
-                        Passwords do not match
+                        style="display: none; color: #e53e3e; font-size: 0.875rem; margin-bottom: 1rem;">
+                        <span data-en>Passwords do not match</span>
+                        <span data-fr>Les mots de passe ne correspondent pas</span>
                     </div>
-                    <button type="submit" class="login-button" data-en="Change Password"
-                        data-fr="Changer le mot de passe">Change Password</button>
+                    <button type="submit" class="login-button">
+                        <span data-en>Change Password</span>
+                        <span data-fr>Changer le mot de passe</span>
+                    </button>
                 </form>
             </div>
         </div>

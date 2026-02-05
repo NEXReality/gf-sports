@@ -35,10 +35,143 @@ function getBasePath() {
 function getCurrentLanguage() {
   return localStorage.getItem("language") || "en"
 }
-// Check if user logged in
+
+// Cached auth state to prevent repeated Supabase calls
+let cachedAuthState = {
+  user: null,        // cached user object (null = not checked yet or not logged in)
+  isLoggedIn: null,  // null = not checked yet, true/false = cached value
+  isChecking: false, // flag to prevent concurrent checks
+  accountStatus: null,   // pending, approved, suspended
+  jerseyAccess: null,    // boolean or null (not checked)
+  socksAccess: null      // boolean or null (not checked)
+};
+
+// Check if user logged in (uses cached value if available)
 async function checkUserLoggedIn() {
-  const { data: { user } } = await supabase.auth.getUser();
-  return user !== null;
+  // Return cached value if available
+  if (cachedAuthState.isLoggedIn !== null) {
+    return cachedAuthState.isLoggedIn;
+  }
+  
+  // Prevent concurrent checks
+  if (cachedAuthState.isChecking) {
+    // Wait for ongoing check to complete
+    while (cachedAuthState.isChecking) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    return cachedAuthState.isLoggedIn;
+  }
+  
+  // Perform the check
+  cachedAuthState.isChecking = true;
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    cachedAuthState.user = user;
+    cachedAuthState.isLoggedIn = user !== null && !error;
+    return cachedAuthState.isLoggedIn;
+  } catch (error) {
+    cachedAuthState.user = null;
+    cachedAuthState.isLoggedIn = false;
+    return false;
+  } finally {
+    cachedAuthState.isChecking = false;
+  }
+}
+
+// Get user (uses cached value if available, otherwise fetches)
+async function getCachedAuthUser() {
+  // If we have a cached value, return it
+  if (cachedAuthState.isLoggedIn !== null) {
+    return cachedAuthState.user;
+  }
+  
+  // Otherwise, check and cache
+  await checkUserLoggedIn();
+  return cachedAuthState.user;
+}
+
+// Function to invalidate auth cache (call after login/logout)
+function invalidateAuthCache() {
+  cachedAuthState.user = null;
+  cachedAuthState.isLoggedIn = null;
+  cachedAuthState.isChecking = false;
+  cachedAuthState.accountStatus = null;
+  cachedAuthState.jerseyAccess = null;
+  cachedAuthState.socksAccess = null;
+}
+
+// Get account status from profiles table
+async function getAccountStatus() {
+  // Return cached value if available
+  if (cachedAuthState.accountStatus !== null) {
+    return cachedAuthState.accountStatus;
+  }
+  
+  const user = await getCachedAuthUser();
+  if (!user) return 'pending';
+  
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('account_status')
+    .eq('user_id', user.id)
+    .single();
+  
+  if (error || !data) {
+    console.error('Error fetching account status:', error);
+    return 'pending';
+  }
+  
+  cachedAuthState.accountStatus = data.account_status || 'pending';
+  return cachedAuthState.accountStatus;
+}
+
+// Get configurator access (jersey_access, socks_access)
+async function getConfiguratorAccess() {
+  // Return cached values if available
+  if (cachedAuthState.jerseyAccess !== null && cachedAuthState.socksAccess !== null) {
+    return {
+      jersey_access: cachedAuthState.jerseyAccess,
+      socks_access: cachedAuthState.socksAccess
+    };
+  }
+  
+  const user = await getCachedAuthUser();
+  if (!user) {
+    return { jersey_access: false, socks_access: false };
+  }
+  
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('account_status, jersey_access, socks_access')
+    .eq('user_id', user.id)
+    .single();
+  
+  if (error || !data) {
+    console.error('Error fetching configurator access:', error);
+    return { jersey_access: false, socks_access: false };
+  }
+  
+  // Cache all values
+  cachedAuthState.accountStatus = data.account_status || 'pending';
+  cachedAuthState.jerseyAccess = data.jersey_access || false;
+  cachedAuthState.socksAccess = data.socks_access || false;
+  
+  return {
+    jersey_access: cachedAuthState.jerseyAccess,
+    socks_access: cachedAuthState.socksAccess
+  };
+}
+
+// Check if user can access a specific configurator
+async function canAccessConfigurator(type) {
+  const isLoggedIn = await checkUserLoggedIn();
+  if (!isLoggedIn) return false;
+  
+  const status = await getAccountStatus();
+  if (status !== 'approved') return false;
+  
+  const access = await getConfiguratorAccess();
+  return type === 'jersey' ? access.jersey_access : access.socks_access;
 }
 
 // Handle create account form submission
@@ -51,38 +184,67 @@ function validatePhoneNumber(phoneNumber) {
 }
 
 // Add event listener to phone number input
-phoneNumberInput.addEventListener('input', function (e) {
+if (phoneNumberInput) {
+  phoneNumberInput.addEventListener('input', function (e) {
+    let input = e.target.value;
+
+    // Remove any characters that are not digits, +, -, (, or )
+    input = input.replace(/[^\d()+\-]/g, '');
+
+    // Truncate to 15 characters if longer
+    input = input.slice(0, 15);
+
+    // Update the input value
+    e.target.value = input;
+
+    // Visual feedback for minimum length
+    if (input.length < 7) {
+      e.target.setCustomValidity('Phone number must be at least 7 characters long');
+    } else {
+      e.target.setCustomValidity('');
+    }
+  });
+}
+
+// Allow only letters (and space, hyphen, apostrophe for names) in first/last name
+const firstNameInput = document.getElementById('firstName');
+const lastNameInput = document.getElementById('lastName');
+
+function allowAlphabetsOnly(e) {
   let input = e.target.value;
-
-  // Remove any characters that are not digits, +, -, (, or )
-  input = input.replace(/[^\d()+\-]/g, '');
-
-  // Truncate to 15 characters if longer
-  input = input.slice(0, 15);
-
-  // Update the input value
+  // Keep only A-Z, a-z, space, hyphen, apostrophe
+  input = input.replace(/[^A-Za-z\s\-']/g, '');
   e.target.value = input;
+}
 
-  // Visual feedback for minimum length
-  if (input.length < 7) {
-    e.target.setCustomValidity('Phone number must be at least 7 characters long');
-  } else {
-    e.target.setCustomValidity('');
-  }
-});
+if (firstNameInput) {
+  firstNameInput.addEventListener('input', allowAlphabetsOnly);
+}
+if (lastNameInput) {
+  lastNameInput.addEventListener('input', allowAlphabetsOnly);
+}
 
-createAccountForm.addEventListener('submit', async (e) => {
+if (createAccountForm) {
+  createAccountForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const firstName = document.getElementById('firstName').value;
   const lastName = document.getElementById('lastName').value;
   const phoneNumber = phoneNumberInput.value;
-  const clubName = document.getElementById('clubName').value;
+  const clubNameEl = document.getElementById('clubNameSignup') || document.getElementById('clubName');
+  const clubName = clubNameEl ? clubNameEl.value : '';
+  const distributorNameEl = document.getElementById('distributorNameSignup');
+  const distributorName = distributorNameEl ? distributorNameEl.value.trim() : '';
   const email = document.getElementById('signupEmail').value;
   const password = document.getElementById('signupPassword').value;
 
   // Ensure phone number is valid
   if (!validatePhoneNumber(phoneNumber)) {
     window.translatedAlert('invalid_phone_number', 'Phone number must be 7-15 characters long and contain only numbers, +, -, (, and )');
+    return;
+  }
+
+  if (!distributorName) {
+    window.translatedAlert('distributor_name_required', 'Distributor name is required.');
     return;
   }
 
@@ -95,7 +257,8 @@ createAccountForm.addEventListener('submit', async (e) => {
           first_name: firstName,
           last_name: lastName,
           phone_number: phoneNumber,
-          club_name: clubName
+          club_name: clubName,
+          distributor_name: distributorName
         }
       }
     });
@@ -103,13 +266,14 @@ createAccountForm.addEventListener('submit', async (e) => {
     if (error) throw error;
 
     console.log('Sign up successful:', data);
-    window.translatedAlert('signup_successful');
+    window.translatedAlert('signup_successful_check_email');
     closeAllModals();
   } catch (error) {
     console.error('Error during sign up:', error);
     window.translatedAlert('signup_failed', error ? error.message : 'An unknown error occurred');
   }
-});
+  });
+}
 
 // Handle login form submission
 const loginForm = document.querySelector('.login-form');
@@ -127,6 +291,7 @@ loginForm.addEventListener('submit', async (e) => {
     if (error) throw error;
 
     console.log('Login successful:', data.user);
+    invalidateAuthCache(); // Invalidate cache after login
     closeAllModals();
     await updateUIBasedOnLoginStatus();
     window.location.reload();
@@ -489,15 +654,10 @@ async function updateUIBasedOnLoginStatus() {
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          <span data-en="Log out" data-fr="Déconnexion">${getTranslation("logout", currentLang)}</span>
+          <span data-en>Log out</span>
+          <span data-fr>Déconnexion</span>
         `
       userDropdown.appendChild(logoutBtn)
-    } else {
-      // Update existing logout button text
-      const logoutText = logoutBtn.querySelector("span[data-en]")
-      if (logoutText) {
-        logoutText.textContent = getTranslation("logout", currentLang)
-      }
     }
     logoutBtn.style.display = "flex"
   } else {
@@ -512,11 +672,10 @@ async function updateUIBasedOnLoginStatus() {
 function updateLogoutButtonText() {
   const logoutBtn = document.getElementById("logout-btn")
   if (logoutBtn) {
-    const currentLang = localStorage.getItem("language") || "en"
-    const logoutText = logoutBtn.querySelector("span[data-en]")
-    if (logoutText) {
-      logoutText.textContent = getTranslation("logout", currentLang)
-    }
+    const enSpan = logoutBtn.querySelector("span[data-en]")
+    const frSpan = logoutBtn.querySelector("span[data-fr]")
+    if (enSpan) enSpan.textContent = getTranslation("logout", "en")
+    if (frSpan) frSpan.textContent = getTranslation("logout", "fr")
   }
 }
 
@@ -534,6 +693,7 @@ document.addEventListener('click', async (e) => {
       if (error) throw error;
 
       console.log('Logged out successfully');
+      invalidateAuthCache(); // Invalidate cache after logout
       await updateUIBasedOnLoginStatus();
       // Redirect to index.html
       window.location.href = 'index.html';
@@ -544,21 +704,32 @@ document.addEventListener('click', async (e) => {
   }
 });
 
+// Make auth functions available globally
+window.checkUserLoggedIn = checkUserLoggedIn;
+window.getCachedAuthUser = getCachedAuthUser;
+window.invalidateAuthCache = invalidateAuthCache;
+window.getAccountStatus = getAccountStatus;
+window.getConfiguratorAccess = getConfiguratorAccess;
+window.canAccessConfigurator = canAccessConfigurator;
+window.showLoginModal = showLoginModal;
+
 const languageToggle = document.querySelector('.toggle-switch');
 const frenchElements = document.querySelectorAll('[data-fr]');
 const englishElements = document.querySelectorAll('[data-en]');
 
-languageToggle.addEventListener('click', () => {
-  const currentLang = localStorage.getItem('language') || 'en';
-  const nextLang = currentLang === 'en' ? 'fr' : 'en';
-  setLanguage(nextLang);
-  updateLogoutButtonText();
+if (languageToggle) {
+  languageToggle.addEventListener('click', () => {
+    const currentLang = localStorage.getItem('language') || 'en';
+    const nextLang = currentLang === 'en' ? 'fr' : 'en';
+    setLanguage(nextLang);
+    updateLogoutButtonText();
 
-  // Check if updateOrderDetails function exists before calling it
-  if (typeof updateOrderDetails === 'function') {
-    updateOrderDetails();
-  }
-});
+    // Check if updateOrderDetails function exists before calling it
+    if (typeof updateOrderDetails === 'function') {
+      updateOrderDetails();
+    }
+  });
+}
 
 
 function updateSelectOptions(lang) {
@@ -597,9 +768,21 @@ const alertMessages = {
     'en': 'Sign up successful! Check your email for the confirmation link.',
     'fr': 'Inscription réussie ! Vérifiez votre e-mail pour le lien de confirmation.'
   },
+  'signup_successful_check_email': {
+    'en': 'Sign up successful! Please check your email to confirm your account before signing in.',
+    'fr': 'Inscription réussie ! Veuillez vérifier votre e-mail pour confirmer votre compte avant de vous connecter.'
+  },
   'signup_failed': {
     'en': 'Sign up failed:',
     'fr': 'Échec de l\'inscription :'
+  },
+  'invalid_phone_number': {
+    'en': 'Phone number must be 7-15 characters long and contain only numbers, +, -, (, and )',
+    'fr': 'Le numéro de téléphone doit contenir 7 à 15 caractères (chiffres, +, -, (, ))'
+  },
+  'distributor_name_required': {
+    'en': 'Distributor name is required.',
+    'fr': 'Le nom du distributeur est obligatoire.'
   },
   'login_failed': {
     'en': 'Login failed:',
@@ -734,6 +917,42 @@ const alertMessages = {
   'saving': {
     en: 'Saving...',
     fr: 'Enregistrement...'
+  },
+  'account_pending_title': {
+    'en': 'Account Pending Approval',
+    'fr': 'Compte en attente d\'approbation'
+  },
+  'account_pending_message': {
+    'en': 'Your account is being reviewed. You\'ll receive an email when approved.',
+    'fr': 'Votre compte est en cours de vérification. Vous recevrez un e-mail une fois approuvé.'
+  },
+  'account_suspended_title': {
+    'en': 'Account Suspended',
+    'fr': 'Compte suspendu'
+  },
+  'account_suspended_message': {
+    'en': 'Your account has been suspended. Contact support if this is an error.',
+    'fr': 'Votre compte a été suspendu. Contactez le support si c\'est une erreur.'
+  },
+  'no_configurator_access_title': {
+    'en': 'Access Not Granted',
+    'fr': 'Accès non accordé'
+  },
+  'no_configurator_access_message': {
+    'en': 'You do not have access to this configurator. Please contact the administrator if you believe this is an error.',
+    'fr': 'Vous n\'avez pas accès à ce configurateur. Veuillez contacter l\'administrateur si vous pensez qu\'il s\'agit d\'une erreur.'
+  },
+  'login_required_title': {
+    'en': 'Login Required',
+    'fr': 'Connexion requise'
+  },
+  'login_required_message': {
+    'en': 'Please log in to access the configurator.',
+    'fr': 'Veuillez vous connecter pour accéder au configurateur.'
+  },
+  'login_required_configurator': {
+    'en': 'Please log in to access the configurator.',
+    'fr': 'Veuillez vous connecter pour accéder au configurateur.'
   }
 }
 
@@ -749,21 +968,24 @@ function showTranslatedAlert(messageKey, ...args) {
 window.translatedAlert = showTranslatedAlert
 
 function setLanguage(lang) {
-  // Set display for text elements
+  // Drive CSS language rules (socks-configurator/styles.css uses .lang-fr on document)
+  const root = document.documentElement;
   if (lang === 'fr') {
+    root.classList.add('lang-fr');
     frenchElements.forEach(el => el.style.display = 'inline');
     englishElements.forEach(el => el.style.display = 'none');
-    languageToggle.setAttribute('aria-pressed', 'true');
+    if (languageToggle) languageToggle.setAttribute('aria-pressed', 'true');
   } else {
+    root.classList.remove('lang-fr');
     frenchElements.forEach(el => el.style.display = 'none');
     englishElements.forEach(el => el.style.display = 'inline');
-    languageToggle.setAttribute('aria-pressed', 'false');
+    if (languageToggle) languageToggle.setAttribute('aria-pressed', 'false');
   }
 
   updateSelectOptions(lang);
   updatePlaceholders(lang);
   localStorage.setItem('language', lang);
-  document.documentElement.lang = lang;
+  root.lang = lang;
 
   // Update title if it exists
   const titleElement = document.querySelector('title');

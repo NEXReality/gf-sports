@@ -384,6 +384,36 @@ body.share-page .viewer-container {
   background: #111827;
 }
 
+/* Disabled card styles for access control */
+.card.disabled {
+  opacity: 0.6;
+  filter: grayscale(30%);
+  pointer-events: auto;
+}
+
+.card.disabled .card-image {
+  filter: grayscale(50%);
+}
+
+.card.disabled .card-button-default {
+  display: none !important;
+}
+
+/* Hidden by default, shown when card is disabled */
+.card-button-disabled {
+  display: none;
+}
+
+.card.disabled .card-button-disabled {
+  display: inline-block;
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+.card.disabled .card-button-disabled:hover {
+  background: #9ca3af;
+}
+
 .description {
   max-width: 1000px;
   text-align: center;
@@ -2077,6 +2107,80 @@ body.share-page .viewer-container {
   height: 120px;
 }
 
+/* Access blocked overlay - configurator gate (Layer 1 UX) */
+.access-blocked-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  pointer-events: auto;
+}
+
+.access-blocked-overlay .access-blocked-content {
+  background: var(--color-background, #fff);
+  padding: 1.5rem 2rem;
+  border-radius: var(--radius-lg, 8px);
+  max-width: 420px;
+  width: 90%;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  text-align: center;
+}
+
+.access-blocked-overlay .access-blocked-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  color: var(--color-text, #1f2937);
+}
+
+.access-blocked-overlay .access-blocked-message {
+  font-size: 0.9375rem;
+  color: var(--color-text-secondary, #6b7280);
+  margin-bottom: 1.25rem;
+  line-height: 1.5;
+}
+
+.access-blocked-overlay .access-blocked-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.access-blocked-overlay .access-blocked-actions button {
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-lg, 8px);
+  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--color-surface, #f9fafb);
+  color: var(--color-text, #1f2937);
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.access-blocked-overlay .access-blocked-actions button.primary,
+.access-blocked-overlay .access-blocked-actions a.access-blocked-btn.primary {
+  background: var(--color-primary, #1f2937);
+  color: white;
+  border-color: transparent;
+}
+
+.access-blocked-overlay .access-blocked-actions a.access-blocked-btn {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-lg, 8px);
+  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--color-surface, #f9fafb);
+  color: var(--color-text, #1f2937);
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+
 .screenshot-button {
   flex: 1;
   position: absolute;
@@ -2115,5 +2219,52 @@ body.share-page .viewer-container {
 }
 
 .download-button:hover {
+  background: #111827;
+}
+
+/* Access Denied Modal styles */
+.access-denied-text {
+  font-size: 0.9375rem;
+  color: var(--color-text-secondary);
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+}
+
+.access-denied-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
+.access-denied-contact-btn {
+  padding: 0.75rem 1.25rem;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.access-denied-contact-btn:hover {
+  background: var(--color-border);
+}
+
+.access-denied-close-btn {
+  padding: 0.75rem 1.25rem;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-lg);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.access-denied-close-btn:hover {
   background: #111827;
 }

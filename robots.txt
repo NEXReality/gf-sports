@@ -6,5 +6,6 @@ Disallow: /admin-user-designs/
 Disallow: /jersey-configurator/admin-design/
 Disallow: /socks-configurator/admin-design/
 Disallow: /order-details/
+Disallow: /user-controls/
 
-Sitemap: http://gf-sports.fr/sitemap.xml
+Sitemap: https://gf-sports.fr/sitemap.xml

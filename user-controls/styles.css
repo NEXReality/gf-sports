@@ -1,0 +1,312 @@
+/* User Controls specific styles */
+
+/* Users table styles */
+.users-table {
+    background: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin-bottom: 2rem;
+    overflow-x: auto;
+}
+
+.users-table table {
+    min-width: 900px;
+}
+
+/* Status badge styles */
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.status-badge.pending {
+    background-color: #fef3c7;
+    color: #92400e;
+}
+
+.status-badge.approved {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+/* Approved with partial access (only one configurator) - info blue */
+.status-badge.approved.partial-access {
+    background-color: #dbeafe;
+    color: #1e40af;
+}
+
+/* Approved but no access to any configurator - warning orange */
+.status-badge.approved.no-access {
+    background-color: #fed7aa;
+    color: #9a3412;
+}
+
+.status-badge.suspended {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+/* Access checkbox styles - matching jersey-configurator checkbox-input */
+.access-checkbox {
+    width: 1rem;
+    height: 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    cursor: pointer;
+    background: var(--color-background);
+    transition: all 0.2s ease;
+}
+
+.access-checkbox:checked {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M20 6L9 17l-5-5'%3E%3C/path%3E%3C/svg%3E");
+    background-size: 0.75rem;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.access-checkbox:hover {
+    border-color: var(--color-primary);
+}
+
+.access-checkbox:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background-color: var(--color-surface);
+}
+
+/* Disabled checkbox cell styling */
+.checkbox-cell.access-disabled {
+    position: relative;
+    cursor: help;
+}
+
+/* Inactive row styling for pending/suspended users (Jersey and Socks columns) */
+.users-table tbody tr.row-inactive td:nth-child(8),
+.users-table tbody tr.row-inactive td:nth-child(9) {
+    background-color: rgba(0, 0, 0, 0.03);
+}
+
+/* Checkbox cell alignment */
+td.checkbox-cell {
+    text-align: center;
+}
+
+/* Action button styles */
+.action-button {
+    padding: 0.375rem 0.75rem;
+    border-radius: var(--radius-lg);
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.action-button.approve {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.action-button.approve:hover {
+    background-color: #a7f3d0;
+}
+
+.action-button.suspend {
+}
+
+.action-button.suspend:hover {
+    background-color: #fecaca;
+}
+
+.action-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Toast notification styles */
+.toast-container {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    z-index: 9999;
+}
+
+.toast {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    border-radius: var(--radius-lg);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    margin-top: 0.5rem;
+    animation: slideIn 0.3s ease;
+}
+
+.toast.success {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.toast.error {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+.toast.info {
+    background-color: #dbeafe;
+    color: #1e40af;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slideOut {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+}
+
+.toast.hiding {
+    animation: slideOut 0.3s ease forwards;
+}
+
+/* Confirm action modal */
+.confirm-action-warning {
+    margin-bottom: 1.5rem;
+    font-size: 0.9375rem;
+    color: var(--color-text);
+    line-height: 1.5;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+    margin-top: 1rem;
+}
+
+.btn-modal-cancel {
+    padding: 0.75rem 1.25rem;
+    border-radius: var(--radius-lg);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.btn-modal-cancel:hover {
+    background-color: #e5e7eb;
+    border-color: #d1d5db;
+}
+
+.btn-modal-confirm {
+    padding: 0.75rem 1.25rem;
+    border-radius: var(--radius-lg);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    background: var(--color-primary);
+    border: none;
+    color: white;
+    transition: background-color 0.2s;
+}
+
+.btn-modal-confirm:hover {
+    background-color: #111827;
+}
+
+/* Access denied state */
+.access-denied {
+    text-align: left;
+    padding: 0.75rem 1rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+}
+
+.access-denied span {
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-secondary);
+}
+
+/* Empty state */
+.empty-state {
+    text-align: center;
+    padding: 3rem 2rem;
+    color: var(--color-text-secondary);
+}
+
+.empty-state svg {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.empty-state h3 {
+    font-size: 1.125rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+    color: var(--color-text);
+}
+
+.empty-state p {
+    font-size: 0.875rem;
+}
+
+/* Table hover effect */
+.users-table tbody tr:hover {
+    background-color: var(--color-surface);
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+    .users-table {
+        overflow-x: auto;
+    }
+    
+    .users-table table {
+        min-width: 800px;
+    }
+}
+
+@media (max-width: 768px) {
+    .admin-container {
+        padding: 1rem;
+    }
+    
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+}

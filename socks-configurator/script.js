@@ -1,5 +1,208 @@
 import { handleColorChange, readLogo, getLogosInfo, loadInitialConfig, takeScreenshot, takeCurrentViewScreenshot } from "./threeD-script.js";
 
+// --- Configurator access gate (Layer 1 UX + tamper detection) ---
+let accessBlockedOverlayObserver = null;
+let accessBlockedReverifyInterval = null;
+
+// Exact copy from index.html access-denied modal (EN/FR) so message stays in sync and language toggle works
+const ACCESS_BLOCKED_TEXTS = {
+    no_configurator: {
+        titleEn: 'Access Not Granted',
+        titleFr: 'Accès Non Accordé',
+        messageEn: 'You do not have access to this configurator. Please contact the administrator if you believe this is an error.',
+        messageFr: 'Vous n\'avez pas accès à ce configurateur. Veuillez contacter l\'administrateur si vous pensez qu\'il s\'agit d\'une erreur.'
+    },
+    pending: { titleEn: 'Account Pending Approval', titleFr: 'Compte en attente d\'approbation', messageEn: 'Your account is being reviewed. You\'ll receive an email when approved.', messageFr: 'Votre compte est en cours de vérification. Vous recevrez un e-mail une fois approuvé.' },
+    suspended: { titleEn: 'Account Suspended', titleFr: 'Compte suspendu', messageEn: 'Your account has been suspended. Contact support if this is an error.', messageFr: 'Votre compte a été suspendu. Contactez le support si c\'est une erreur.' },
+    login_required: { titleEn: 'Login Required', titleFr: 'Connexion requise', messageEn: 'Please log in to access the configurator.', messageFr: 'Veuillez vous connecter pour accéder au configurateur.' }
+};
+
+function getBlockedMessageHTML(reason) {
+    const t = ACCESS_BLOCKED_TEXTS[reason] || ACCESS_BLOCKED_TEXTS.no_configurator;
+    return '<div class="access-blocked-content">' +
+        '<h2 class="access-blocked-title">' +
+        '<span data-en>' + t.titleEn + '</span><span data-fr>' + t.titleFr + '</span></h2>' +
+        '<p class="access-blocked-message">' +
+        '<span data-en>' + t.messageEn + '</span><span data-fr>' + t.messageFr + '</span></p>' +
+        '<div class="access-blocked-actions">' +
+        '<a href="../index.html" class="access-blocked-btn primary"><span data-en>Go to Home</span><span data-fr>Accueil</span></a>' +
+        '<a href="mailto:admin@globe-fashion.com" class="access-blocked-btn"><span data-en>Contact Support</span><span data-fr>Contacter le Support</span></a>' +
+        '</div></div>';
+}
+
+function showAccessBlockedOverlay(reason) {
+    if (document.getElementById('access-blocked-overlay')) return;
+    const overlay = document.createElement('div');
+    overlay.id = 'access-blocked-overlay';
+    overlay.className = 'access-blocked-overlay';
+    overlay.innerHTML = getBlockedMessageHTML(reason);
+    document.body.appendChild(overlay);
+
+    document.querySelectorAll('input, button, select, textarea, canvas').forEach((el) => {
+        el.disabled = true;
+        el.style.pointerEvents = 'none';
+    });
+
+    if (accessBlockedOverlayObserver) {
+        try { accessBlockedOverlayObserver.disconnect(); } catch (e) {}
+    }
+    accessBlockedOverlayObserver = new MutationObserver(() => {
+        if (!document.getElementById('access-blocked-overlay')) {
+            location.reload();
+        }
+    });
+    accessBlockedOverlayObserver.observe(document.body, { childList: true, subtree: true });
+
+    if (!accessBlockedReverifyInterval) {
+        const RECHECK_MS = 30000;
+        accessBlockedReverifyInterval = setInterval(async () => {
+            const overlay = document.getElementById('access-blocked-overlay');
+            if (overlay) {
+                const hasAccess = typeof window.canAccessConfigurator === 'function' && await window.canAccessConfigurator('socks');
+                if (hasAccess) location.reload();
+                return;
+            }
+            if (typeof window.invalidateAuthCache === 'function') window.invalidateAuthCache();
+            const hasAccess = typeof window.canAccessConfigurator === 'function' && await window.canAccessConfigurator('socks');
+            if (!hasAccess) {
+                const reason = await getAccessBlockReason('socks');
+                if (reason) {
+                    if (reason === 'login_required' && typeof window.showLoginModal === 'function') window.showLoginModal();
+                    else showAccessBlockedOverlay(reason);
+                }
+            }
+        }, RECHECK_MS);
+    }
+}
+
+async function getAccessBlockReason(configuratorType) {
+    if (typeof window.checkUserLoggedIn !== 'function') return 'login_required';
+    const isLoggedIn = await window.checkUserLoggedIn();
+    if (!isLoggedIn) return 'login_required';
+    if (typeof window.getAccountStatus !== 'function') return 'pending';
+    const status = await window.getAccountStatus();
+    if (status !== 'approved') return status || 'pending';
+    if (typeof window.getConfiguratorAccess !== 'function') return 'no_configurator_access';
+    const access = await window.getConfiguratorAccess();
+    const allowed = configuratorType === 'jersey' ? access.jersey_access : access.socks_access;
+    return allowed ? null : 'no_configurator_access';
+}
+
+async function checkConfiguratorAccess() {
+    const isLoggedIn = typeof window.checkUserLoggedIn === 'function' && await window.checkUserLoggedIn();
+    if (!isLoggedIn) {
+        if (typeof window.showLoginModal === 'function') window.showLoginModal();
+        return false;
+    }
+    const status = typeof window.getAccountStatus === 'function' ? await window.getAccountStatus() : 'pending';
+    if (status !== 'approved') {
+        showAccessBlockedOverlay(status);
+        return false;
+    }
+    const access = typeof window.getConfiguratorAccess === 'function' ? await window.getConfiguratorAccess() : { socks_access: false };
+    if (!access.socks_access) {
+        showAccessBlockedOverlay('no_configurator_access');
+        return false;
+    }
+    return true;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    checkConfiguratorAccess();
+    if (accessBlockedReverifyInterval) return;
+    const RECHECK_MS = 30000;
+    accessBlockedReverifyInterval = setInterval(async () => {
+        const overlay = document.getElementById('access-blocked-overlay');
+        if (overlay) {
+            const hasAccess = typeof window.canAccessConfigurator === 'function' && await window.canAccessConfigurator('socks');
+            if (hasAccess) location.reload();
+            return;
+        }
+        if (typeof window.invalidateAuthCache === 'function') window.invalidateAuthCache();
+        const hasAccess = typeof window.canAccessConfigurator === 'function' && await window.canAccessConfigurator('socks');
+        if (!hasAccess) {
+            const reason = await getAccessBlockReason('socks');
+            if (reason) {
+                if (reason === 'login_required' && typeof window.showLoginModal === 'function') window.showLoginModal();
+                else showAccessBlockedOverlay(reason);
+            }
+        }
+    }, RECHECK_MS);
+});
+
+// ==================== AUTH GUARD FOR EDIT ACTIONS (match jersey-configurator) ====================
+async function requireLoginGuard(evt, el) {
+    try {
+        const isLoggedIn = typeof window.checkUserLoggedIn === 'function' && await window.checkUserLoggedIn();
+        if (isLoggedIn) return true;
+    } catch (e) {
+        console.error('Auth check failed', e);
+    }
+
+    if (evt) {
+        evt.preventDefault();
+        evt.stopPropagation();
+    }
+
+    if (el) {
+        if (el.type === 'checkbox' || el.type === 'radio') {
+            if (el.dataset.prevChecked !== undefined) {
+                el.checked = el.dataset.prevChecked === 'true';
+            }
+        } else if (el.tagName === 'SELECT' || el.tagName === 'INPUT') {
+            if (el.type === 'file') {
+                el.value = '';
+            } else if (el.dataset.prevValue !== undefined) {
+                el.value = el.dataset.prevValue;
+                if (el.type === 'range' || el.type === 'number') {
+                    const valueDisplay = el.closest('.settings-group, .scale-group')?.querySelector('.range-value');
+                    if (valueDisplay) {
+                        const unit = el.dataset.unit || '';
+                        valueDisplay.textContent = el.value + unit;
+                    }
+                }
+            }
+        }
+    }
+
+    if (typeof window.showLoginModal === 'function') window.showLoginModal();
+    return false;
+}
+window.requireLoginGuard = requireLoginGuard;
+
+function protectInputs(container) {
+    if (!container) return;
+    const inputs = container.querySelectorAll('input, select');
+    inputs.forEach(input => {
+        input.addEventListener('focusin', () => {
+            if (input.type === 'checkbox' || input.type === 'radio') {
+                input.dataset.prevChecked = input.checked.toString();
+            } else {
+                input.dataset.prevValue = input.value;
+            }
+        });
+
+        const handler = async (e) => {
+            const allowed = await requireLoginGuard(e, input);
+            if (!allowed) return;
+        };
+
+        input.addEventListener('change', handler);
+        if (input.type === 'range' || input.type === 'color' || input.type === 'number') {
+            input.addEventListener('input', handler);
+        }
+    });
+}
+
+function initializeProtectedControls() {
+    const panel = document.querySelector('.customization-panel');
+    if (panel) protectInputs(panel);
+}
+
+window.addEventListener('load', () => {
+    initializeProtectedControls();
+});
+
 // Part selector with settings toggle
 const partButtons = document.querySelectorAll('.part-button');
 const footSettings = document.querySelector('.foot-settings');
@@ -17,7 +220,9 @@ const legStripesGroup = document.getElementById('leg-stripes-orientation').close
 const cuffStripesGroup = document.getElementById('cuff-stripes-orientation').closest('.radio-group');
 const initialLang = localStorage.getItem('language');
 partButtons.forEach(button => {
-    button.addEventListener('click', () => {
+    button.addEventListener('click', async () => {
+        const allowed = await requireLoginGuard(null, null);
+        if (!allowed) return;
         // Update active button
         partButtons.forEach(btn => btn.classList.remove('active'));
         button.classList.add('active');
@@ -47,7 +252,9 @@ function setupColorSelector(selector) {
         return;
     }
 
-    trigger.addEventListener('click', (e) => {
+    trigger.addEventListener('click', async (e) => {
+        const allowed = await requireLoginGuard(e, null);
+        if (!allowed) return;
         e.stopPropagation();
         const isExpanded = trigger.getAttribute('aria-expanded') === 'true';
         trigger.setAttribute('aria-expanded', !isExpanded);
@@ -55,7 +262,9 @@ function setupColorSelector(selector) {
     });
 
     grid.querySelectorAll('.color-option').forEach(option => {
-        option.addEventListener('click', (e) => {
+        option.addEventListener('click', async (e) => {
+            const allowed = await requireLoginGuard(e, null);
+            if (!allowed) return;
             e.stopPropagation();
             const color = option.style.backgroundColor;
             const colorNumber = option.dataset.color;
@@ -275,7 +484,10 @@ if (saveDropdown) {
 
 // Main save button click handler
 document.querySelector('.save-button').addEventListener('click', async () => {
-    const isLoggedIn = await checkUserLoggedIn();
+    let isLoggedIn = false;
+    if (typeof window.checkUserLoggedIn === 'function') {
+        isLoggedIn = await window.checkUserLoggedIn();
+    }
 
     saveSockConfiguration();
     // let screenshotDataUrl = captureScreenshot(320, 180).then(dataURL => {
@@ -299,8 +511,7 @@ document.querySelector('.save-button').addEventListener('click', async () => {
             showDesignSaveModal();
         }
     } else {
-        console.log('User not logged in. Please log in to save your design.');
-        showLoginModal();
+        if (typeof window.showLoginModal === 'function') window.showLoginModal();
     }
 });
 
@@ -368,6 +579,12 @@ function getTranslation(key, lang = 'en') {
 // New function to handle design saving
 async function saveDesign() {
     if (isSaving) return; // Prevent multiple save attempts
+    // Layer 2: Re-verify access at save time (UX - friendly error)
+    const hasAccess = typeof window.canAccessConfigurator === 'function' && await window.canAccessConfigurator('socks');
+    if (!hasAccess) {
+        if (window.translatedAlert) window.translatedAlert('no_configurator_access_message');
+        return;
+    }
     const saveTextSpan = mainSaveButton.querySelector('.save-text');
 
     try {
@@ -448,12 +665,14 @@ document.getElementById('design-save-confirm-btn').addEventListener('click', asy
 // Handle save as button click
 if (saveAsButton) {
     saveAsButton.addEventListener('click', async () => {
-        const isLoggedIn = await checkUserLoggedIn();
+        let isLoggedIn = false;
+        if (typeof window.checkUserLoggedIn === 'function') {
+            isLoggedIn = await window.checkUserLoggedIn();
+        }
         if (isLoggedIn) {
             showDesignSaveModal();
         } else {
-            console.log('User not logged in. Please log in to save your design.');
-            showLoginModal();
+            if (typeof window.showLoginModal === 'function') window.showLoginModal();
         }
         if (saveDropdown) {
             saveDropdown.style.display = 'none';
@@ -586,6 +805,12 @@ async function checkDesignNameExists(designName) {
 
 // Function to upload thumbnail and save design to Supabase
 async function uploadThumbnailAndSaveDesign(designName) {
+    // Layer 2: Re-verify access before save
+    const hasAccess = typeof window.canAccessConfigurator === 'function' && await window.canAccessConfigurator('socks');
+    if (!hasAccess) {
+        if (window.translatedAlert) window.translatedAlert('no_configurator_access_message');
+        return { success: false, message: (window.getTranslation && window.getTranslation('no_configurator_access_message', (window.getCurrentLanguage && window.getCurrentLanguage()) || 'en')) || 'You do not have permission to save designs.' };
+    }
     try {
         showLoading();
 
@@ -861,9 +1086,11 @@ if (uploadArea) {
         uploadArea.style.borderColor = 'var(--color-border)';
     });
 
-    uploadArea.addEventListener('drop', (e) => {
+    uploadArea.addEventListener('drop', async (e) => {
         e.preventDefault();
         uploadArea.style.borderColor = 'var(--color-border)';
+        const allowed = await requireLoginGuard(e, null);
+        if (!allowed) return;
         const file = e.dataTransfer.files[0];
         if (file && file.type === 'image/png') {
             handleLogoFile(file);
@@ -874,7 +1101,12 @@ if (uploadArea) {
 }
 
 if (logoUpload) {
-    logoUpload.addEventListener('change', (e) => {
+    logoUpload.addEventListener('change', async (e) => {
+        const allowed = await requireLoginGuard(e, e.target);
+        if (!allowed) {
+            e.target.value = '';
+            return;
+        }
         const file = e.target.files[0];
         if (file) {
             handleLogoFile(file);
@@ -1196,7 +1428,9 @@ function initializeTabs() {
         adjustTabWidths(tabGroup);
 
         tabGroup.querySelectorAll('.no-tab').forEach(tab => {
-            tab.addEventListener('click', () => {
+            tab.addEventListener('click', async () => {
+                const allowed = await requireLoginGuard(null, null);
+                if (!allowed) return;
                 tabGroup.querySelectorAll('.no-tab').forEach(t => t.classList.remove('no-active'));
                 tabGroup.querySelectorAll('.no-tab-content').forEach(content => content.classList.remove('no-active'));
 

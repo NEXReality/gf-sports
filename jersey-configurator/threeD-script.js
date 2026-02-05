@@ -108,6 +108,7 @@ class JerseyViewer {
         this.gltfLoader = new GLTFLoader();
         this.texture = null;
         this.current3DObject = null;
+        this._loadId = 0; // Used to ignore stale load callbacks (race condition fix)
 
         // Materials to exclude from texture application (stitches should keep original appearance)
         this.currentPart = 'front';
@@ -2805,10 +2806,26 @@ class JerseyViewer {
             this.current3DObject = null;
         }
 
+        // Capture load id so we can ignore this callback if a newer load started (race condition fix)
+        const loadId = ++this._loadId;
+
         // Load GLB model
         this.gltfLoader.load(
             modelPath,
             (gltf) => {
+                // Ignore result if a newer load was started (prevents multiple models in scene)
+                if (loadId !== this._loadId) {
+                    debugLog(`⏭️ Ignoring stale model load (loadId ${loadId}, current ${this._loadId})`);
+                    gltf.scene.traverse((child) => {
+                        if (child.geometry) child.geometry.dispose();
+                        if (child.material) {
+                            if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+                            else child.material.dispose();
+                        }
+                    });
+                    return;
+                }
+
                 this.current3DObject = gltf.scene;
 
                 let meshCount = 0;
@@ -2942,8 +2959,10 @@ class JerseyViewer {
             },
             (error) => {
                 console.error('Error loading model:', error);
-                // Still mark as loaded on error
-                this.markModelLoaded();
+                // Only mark as loaded if this was the latest load (avoid stale callback side effects)
+                if (loadId === this._loadId) {
+                    this.markModelLoaded();
+                }
             }
         );
     }

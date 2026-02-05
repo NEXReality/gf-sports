@@ -136,7 +136,7 @@ async function loadSharedDesign() {
         'round_reglan': 'round_collar_reglan_01.glb',
         'round_set_in': 'round_collar_set_in_02.glb',
         'insert_reglan': 'insert_collar_reglan_01.glb',
-        'insert_set_in': 'insert_collar_set_in _01.glb',
+        'insert_set_in': 'insert_collar_set_in_03.glb',
         'v_neck_reglan': 'v_neck_reglan_01.glb',
         'v_neck_set_in': 'v_neck_set_in_01.glb',
         'v_neck_crossed_reglan': 'v_neck_crossed_reglan_01.glb',
