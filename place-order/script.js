@@ -287,7 +287,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <select class="size-range-select">
                 ${availableSizes.map(size => `<option value="${size}">${size}</option>`).join('')}
             </select>
-            <input type="number" class="quantity-input" min="1" value="0">
+            <input type="number" class="quantity-input" min="1" value="1">
             <button class="add-size-range">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>

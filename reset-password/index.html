@@ -45,27 +45,36 @@
     <div class="modal-overlay" style="display: flex;">
         <div class="modal">
             <div class="modal-content">
-                <h2 class="modal-title" data-en="Change Password" data-fr="Changer le mot de passe">Change Password</h2>
+                <h2 class="modal-title">
+                    <span data-en>Change Password</span>
+                    <span data-fr>Changer le mot de passe</span>
+                </h2>
                 <form id="changePasswordForm" class="login-form">
                     <div class="form-group">
-                        <label for="newPassword" data-en="New Password" data-fr="Nouveau mot de passe">New
-                            Password</label>
+                        <label for="newPassword">
+                            <span data-en>New Password</span>
+                            <span data-fr>Nouveau mot de passe</span>
+                        </label>
                         <input type="password" id="newPassword" placeholder="Enter new password"
-                            data-fr-placeholder="Entrez le nouveau mot de passe" required>
+                            data-en-placeholder="Enter new password" data-fr-placeholder="Entrez le nouveau mot de passe" required>
                     </div>
                     <div class="form-group">
-                        <label for="confirmPassword" data-en="Confirm New Password"
-                            data-fr="Confirmer le nouveau mot de passe">Confirm New Password</label>
+                        <label for="confirmPassword">
+                            <span data-en>Confirm New Password</span>
+                            <span data-fr>Confirmer le nouveau mot de passe</span>
+                        </label>
                         <input type="password" id="confirmPassword" placeholder="Confirm new password"
-                            data-fr-placeholder="Confirmez le nouveau mot de passe" required>
+                            data-en-placeholder="Confirm new password" data-fr-placeholder="Confirmez le nouveau mot de passe" required>
                     </div>
                     <div id="passwordMismatch" class="error-message"
-                        style="display: none; color: #e53e3e; font-size: 0.875rem; margin-bottom: 1rem;"
-                        data-en="Passwords do not match" data-fr="Les mots de passe ne correspondent pas">
-                        Passwords do not match
+                        style="display: none; color: #e53e3e; font-size: 0.875rem; margin-bottom: 1rem;">
+                        <span data-en>Passwords do not match</span>
+                        <span data-fr>Les mots de passe ne correspondent pas</span>
                     </div>
-                    <button type="submit" class="login-button" data-en="Change Password"
-                        data-fr="Changer le mot de passe">Change Password</button>
+                    <button type="submit" class="login-button">
+                        <span data-en>Change Password</span>
+                        <span data-fr>Changer le mot de passe</span>
+                    </button>
                 </form>
             </div>
         </div>

@@ -113,6 +113,7 @@ function setLanguage(lang) {
   updateTextContent(lang);
   localStorage.setItem('language', lang);
   document.documentElement.lang = lang;
+  document.documentElement.classList.toggle('lang-fr', lang === 'fr');
 
   // Update title if it exists
   const titleElement = document.querySelector('title');
