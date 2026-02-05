@@ -1,3 +1,23 @@
+// Helper function to get base path (repository name) for GitHub Pages
+// Returns '/gf-sports' on GitHub Pages or '' for local development
+function getBasePath() {
+    const pathname = window.location.pathname;
+    // Extract repo name from path like /gf-sports/admin/index.html
+    const pathParts = pathname.split('/').filter(part => part);
+    
+    // If we're on GitHub Pages, the first part is usually the repo name
+    // Check if we're on github.io domain
+    if (window.location.hostname.includes('github.io')) {
+        // On GitHub Pages, first path segment is the repo name
+        if (pathParts.length > 0) {
+            return `/${pathParts[0]}`;
+        }
+    }
+    
+    // For local development or if no repo name found, return empty string
+    return '';
+}
+
 // Pagination state
 let currentPage = 1;
 const itemsPerPage = 20;
@@ -186,7 +206,8 @@ nextPageBtn.addEventListener('click', () => {
 
 // Show order details - opens order details page in new tab
 function showOrderDetails(orderId) {
-    const orderDetailsUrl = `/order-details/?orderId=${encodeURIComponent(orderId)}`;
+    const basePath = getBasePath();
+    const orderDetailsUrl = `${basePath}/order-details/?orderId=${encodeURIComponent(orderId)}`;
     window.open(orderDetailsUrl, '_blank');
 }
 
@@ -214,11 +235,12 @@ async function openDesignDetails(designName) {
     const designInfo = await findDesignInfoByName(designName);
     if (designInfo && designInfo.short_code) {
         // Determine the correct admin-design path based on product_type
+        const basePath = getBasePath();
         const adminDesignPath = designInfo.product_type === 'jersey' 
             ? '/jersey-configurator/admin-design/' 
             : '/socks-configurator/admin-design/';
         
-        window.open(`${adminDesignPath}?shortCode=${encodeURIComponent(designInfo.short_code)}`, '_blank');
+        window.open(`${basePath}${adminDesignPath}?shortCode=${encodeURIComponent(designInfo.short_code)}`, '_blank');
     } else {
         console.error('Design info not found for design:', designName);
         window.translatedAlert('design_details_not_found');

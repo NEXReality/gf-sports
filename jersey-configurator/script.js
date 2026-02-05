@@ -1,10 +1,16 @@
 // Debug logging function (only logs when DEBUG_MODE is enabled)
-const DEBUG_MODE = false; // Set to true to enable debug logs
+// Add #debug to URL to enable (e.g., http://localhost:8080/jersey-configurator/index.html#debug)
+const DEBUG_MODE = window.location.hash === '#debug';
 function debugLog(...args) {
   if (DEBUG_MODE) {
     console.log(...args);
   }
 }
+
+// Global flag to enable/disable design-colors.json overrides
+// Set to false to always use auto-detection instead of manual overrides
+window.USE_DESIGN_OVERRIDES = false;
+
 
 // Save button dropdown functionality
 const dropdownArrow = document.getElementById('dropdown-arrow');
@@ -69,7 +75,7 @@ function initializeJerseyTabs() {
       });
       if (initialTab) {
         initialTab.classList.add('active');
-        console.log('Initial tab set to:', checkedRadio.value);
+        debugLog('Initial tab set to:', checkedRadio.value);
       } else {
         console.warn('Initial tab not found:', expectedTabId);
         // Fallback: ensure at least one tab is visible
@@ -78,7 +84,7 @@ function initializeJerseyTabs() {
         }
       }
     } else {
-      console.log('Tab already correctly set to:', checkedRadio.value);
+      debugLog('Tab already correctly set to:', checkedRadio.value);
     }
 
     // Set background position
@@ -105,7 +111,7 @@ function initializeJerseyTabs() {
         content.classList.remove('active');
       });
       designsTab.classList.add('active');
-      console.log('No radio checked, defaulting to designs tab');
+      debugLog('No radio checked, defaulting to designs tab');
     }
   }
 
@@ -156,7 +162,7 @@ function initializeJerseyTabs() {
       const targetContent = document.getElementById(`${radio.value}-tab`);
       if (targetContent) {
         targetContent.classList.add('active');
-        console.log('Switched to tab:', radio.value);
+        debugLog('Switched to tab:', radio.value);
       } else {
         console.warn('Target tab not found:', `${radio.value}-tab`);
       }
@@ -187,7 +193,7 @@ window.addEventListener('load', () => {
   const designsTab = document.getElementById('designs-tab');
   const colorsTab = document.getElementById('colors-tab');
   if (designsTab && !designsTab.classList.contains('active') && !colorsTab?.classList.contains('active')) {
-    console.log('Re-initializing tabs on window load');
+    debugLog('Re-initializing tabs on window load');
     initializeJerseyTabs();
   }
 
@@ -230,9 +236,44 @@ async function requireLoginGuard(evt, el) {
   return false;
 }
 
+// Expose requireLoginGuard globally for use in other scripts
+window.requireLoginGuard = requireLoginGuard;
+
 function markDesignDirty() {
+  // Don't mark as dirty if we're currently loading a configuration
+  if (isLoadingConfig) {
+    return;
+  }
+
+  // Check localStorage for loading state (persists across navigation)
+  const loadingState = localStorage.getItem('jerseyDesignLoading');
+  if (loadingState) {
+    try {
+      const { timestamp, designId } = JSON.parse(loadingState);
+      const now = Date.now();
+      const timeSinceLoad = now - timestamp;
+
+      // If we're within 10 seconds of loading and it's the same design, don't mark dirty
+      // This handles async operations and navigation timing issues
+      if (timeSinceLoad < 10000) {
+        // Also check if current design matches (if we have a design ID)
+        if (!designId || currentDesignId === designId || !currentDesignId) {
+          return;
+        }
+      } else {
+        // Loading state is old, remove it
+        localStorage.removeItem('jerseyDesignLoading');
+      }
+    } catch (e) {
+      // Invalid data, remove it
+      localStorage.removeItem('jerseyDesignLoading');
+    }
+  }
+
+  // This is a real user change - mark as dirty and clear any loading flags
   designDirty = true;
   window.designDirty = true;
+  localStorage.removeItem('jerseyDesignLoading'); // Clear loading flag on actual user change
 }
 
 function setDesignClean() {
@@ -304,6 +345,7 @@ const designCustomizationPanel = document.getElementById('design-customization-p
 let currentFamily = null;
 let currentDesign = null;
 let designDirty = false; // tracks unsaved edits
+let isLoadingConfig = false; // prevents marking dirty during config loading
 window.designDirty = designDirty;
 
 
@@ -314,6 +356,8 @@ let currentDesignId = null;
 let isInitialSave = true;
 let isSaving = false;
 let isSharedDesign = false;
+
+
 
 // Get Supabase client (should be available from auth.js)
 // Helper function to get Supabase client - tries to use the one from auth.js first
@@ -333,6 +377,175 @@ function getSupabaseClient() {
 
   return null;
 }
+
+// ==================== DOWNLOAD FUNCTIONALITY ====================
+// Function to download JSON
+function downloadDesignJSON(data, filename) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const link = document.createElement("a");
+  if (link.download !== undefined) {
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+}
+
+function getShortCodeFromUrl() {
+  const urlParams = new URLSearchParams(window.location.search);
+  return urlParams.get('shortCode');
+}
+
+async function fetchDesignData(shortCode) {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    console.error('Supabase client not available');
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from('user_files')
+    .select('design_name, custom_name, design_metadata, short_code, id')
+    .eq('short_code', shortCode)
+    .single();
+
+  if (error) {
+    console.error('Error fetching design data:', error);
+    return null;
+  }
+
+  return data;
+}
+
+// Function to handle the download
+// ==================== ZIP DOWNLOAD HELPERS ====================
+// Helper function to fetch image as blob
+async function fetchImageAsBlob(url) {
+  try {
+    const response = await fetch(url, { mode: 'cors' });
+    if (!response.ok) {
+      console.warn(`Failed to fetch image: ${url}`);
+      return null;
+    }
+    return await response.blob();
+  } catch (error) {
+    console.warn(`Error fetching image ${url}:`, error);
+    return null;
+  }
+}
+
+// Helper function to download zip file
+function downloadZip(blob, filename) {
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  link.setAttribute("href", url);
+  link.setAttribute("download", filename);
+  link.style.visibility = "hidden";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+// Modified handleDownload to create zip with JSON + logos
+async function handleDownload() {
+  try {
+    const shortCode = getShortCodeFromUrl();
+    let metadata;
+    let zipFilename;
+
+    if (shortCode) {
+      // Case 1: Existing design - fetch from database
+      debugLog(`Loading design from database with shortCode: ${shortCode}`);
+      const data = await fetchDesignData(shortCode);
+
+      if (!data || !data.design_metadata) {
+        debugLog("No design metadata found for the given short code");
+        return;
+      }
+
+      metadata = data.design_metadata;
+      zipFilename = `jersey_design_${shortCode}.zip`;
+    } else {
+      // Case 2: New design - capture current state from UI
+      debugLog("No shortCode found - capturing current design state from UI");
+      metadata = getJerseyConfiguration();
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+      zipFilename = `jersey_design_new_${timestamp}.zip`;
+    }
+
+    debugLog("Creating zip package with JSON and logos...");
+
+    // Create zip file
+    const zip = new JSZip();
+
+    // Add JSON configuration
+    zip.file("config.json", JSON.stringify(metadata, null, 2));
+    debugLog("✓ Added config.json");
+
+    // Add logo images
+    const logosFolder = zip.folder("logos");
+    const logoPromises = [];
+
+    if (metadata.logos) {
+      for (const [partName, logos] of Object.entries(metadata.logos)) {
+        if (Array.isArray(logos) && logos.length > 0) {
+          logos.forEach((logo, index) => {
+            if (logo.url) {
+              const promise = fetchImageAsBlob(logo.url).then(blob => {
+                if (blob) {
+                  const filename = `${partName}_logo_${index + 1}.png`;
+                  logosFolder.file(filename, blob);
+                  debugLog(`✓ Added logo: ${filename}`);
+                }
+              });
+              logoPromises.push(promise);
+            }
+          });
+        }
+      }
+    }
+
+    // Wait for all logos to be fetched
+    await Promise.all(logoPromises);
+
+    // Generate and download zip
+    debugLog("Generating zip file...");
+    const zipBlob = await zip.generateAsync({ type: "blob" });
+    downloadZip(zipBlob, zipFilename);
+    debugLog("✅ Zip file downloaded successfully");
+
+  } catch (error) {
+    console.error("Error downloading design package:", error);
+  }
+}
+
+// Event listener for download button
+document.addEventListener("DOMContentLoaded", () => {
+  const downloadButton = document.getElementById("download-button");
+
+  if (downloadButton) {
+    downloadButton.addEventListener("click", handleDownload);
+  }
+
+  // Screenshot button functionality
+  const screenshotButton = document.getElementById('screenshot-button');
+  if (screenshotButton) {
+    screenshotButton.addEventListener('click', () => {
+      // Call the globally exposed function from threeD-script.js
+      if (typeof window.takeCurrentViewScreenshot === 'function') {
+        window.takeCurrentViewScreenshot();
+      } else {
+        console.error('Screenshot function not available yet');
+      }
+    });
+  }
+});
+
 
 // Design configuration - loaded from design-config.json
 // Simple format: just specifies display order, paths are derived from folder names
@@ -364,19 +577,29 @@ function normalizeTypeValue(value, fallback) {
   return v || fallback;
 }
 
+// Helper function to get the correct base path based on current page location
+function getBasePath() {
+  const currentPath = window.location.pathname;
+  const isInSubfolder = currentPath.includes('/admin-design/') || currentPath.includes('/share/');
+  return isInSubfolder ? '../../' : '../';
+}
+
 // Path helpers for the folder structure
 function getFamilyThumbnailPath(familyId, collar, shoulder) {
   // Family thumbnails are per model type (collar + shoulder)
-  // Example: ../designs/design_family/graphic/insert_reglan_graphic_thumb.webp
-  return `../designs/design_family/${familyId}/${collar}_${shoulder}_${familyId}_thumb.webp`;
+  const basePath = typeof getBasePath === 'function' ? getBasePath() : '../';
+  return `${basePath}designs/design_family/${familyId}/${collar}_${shoulder}_${familyId}_thumb.webp`;
 }
 
 function getDesignIconPath(familyId, designId, collar, shoulder) {
-  return `../designs/icons/${familyId}/${designId}/${collar}_${shoulder}_${designId}_thumb.webp`;
+  const basePath = typeof getBasePath === 'function' ? getBasePath() : '../';
+  return `${basePath}designs/icons/${familyId}/${designId}/${collar}_${shoulder}_${designId}_thumb.webp`;
 }
 
 function getDesignSvgPath(familyId, designId, collar, shoulder) {
-  return `../designs/svg/${familyId}/${designId}/${collar}_${shoulder}_${designId}.svg`;
+  // Use getBasePath() if available (from threeD-script.js), otherwise fallback to '../'
+  const basePath = typeof getBasePath === 'function' ? getBasePath() : '../';
+  return `${basePath}designs/svg/${familyId}/${designId}/${collar}_${shoulder}_${designId}.svg`;
 }
 
 function getDesignIdFromSvgPath(svgPath) {
@@ -393,7 +616,10 @@ function getDesignIdFromSvgPath(svgPath) {
 // Load design configuration from JSON file
 async function loadDesignConfig() {
   try {
-    const response = await fetch('./design-config.json');
+    // Use getBasePath() to resolve path correctly from both main page and share subdirectory
+    const basePath = typeof getBasePath === 'function' ? getBasePath() : './';
+    const configPath = basePath === './' ? './design-config.json' : `${basePath}jersey-configurator/design-config.json`;
+    const response = await fetch(configPath);
     if (!response.ok) {
       throw new Error(`Failed to load design-config.json: ${response.status} ${response.statusText}`);
     }
@@ -402,16 +628,16 @@ async function loadDesignConfig() {
     // Load family order
     if (config.familyOrder && Array.isArray(config.familyOrder)) {
       familyOrder = config.familyOrder;
-      console.log('Family order loaded:', familyOrder);
+      debugLog('Family order loaded:', familyOrder);
     }
 
     // Load design order per family
     if (config.designOrder && typeof config.designOrder === 'object') {
       designOrder = config.designOrder;
-      console.log('Design order loaded:', designOrder);
+      debugLog('Design order loaded:', designOrder);
     }
 
-    console.log('Design configuration loaded successfully');
+    debugLog('Design configuration loaded successfully');
     return true;
   } catch (error) {
     console.warn('Failed to load design-config.json, using fallback:', error.message);
@@ -451,10 +677,11 @@ function loadDesignFamilies() {
     img.src = thumbnailPath;
     img.alt = displayName;
     img.onerror = function () {
-      // Fallback to legacy single thumbnail (if present): ../designs/{familyId}.webp
+      // Fallback to legacy single thumbnail (if present): {basePath}designs/{familyId}.webp
       if (!img.dataset.fallbackTried) {
         img.dataset.fallbackTried = '1';
-        img.src = `../designs/${familyId}.webp`;
+        const basePath = getBasePath();
+        img.src = `${basePath}designs/${familyId}.webp`;
         return;
       }
 
@@ -473,7 +700,7 @@ function loadDesignFamilies() {
     designThumbnails.appendChild(thumbnailItem);
   });
 
-  console.log(`Loaded ${familyOrder.length} design families`);
+  debugLog(`Loaded ${familyOrder.length} design families`);
 }
 
 // Get current collar and shoulder from URL parameters
@@ -516,7 +743,7 @@ function updateCollar2OptionVisibility() {
     }
   });
 
-  console.log(`Collar2 option visibility: ${isInsertCollar ? 'visible' : 'hidden'} (collar type: ${collar})`);
+  debugLog(`Collar2 option visibility: ${isInsertCollar ? 'visible' : 'hidden'} (collar type: ${collar})`);
 }
 
 // Load designs from a specific family
@@ -535,10 +762,10 @@ function loadFamilyDesigns(familyId) {
 
   // Get current collar and shoulder from URL parameters
   const { collar, shoulder } = getCurrentCollarAndShoulder();
-  
+
   // Get designs for this family from config
   const familyDesigns = designOrder[familyId] || [];
-  console.log(`Loading ${familyDesigns.length} design(s) from ${toDisplayName(familyId)} for: ${collar}_${shoulder}`);
+  debugLog(`Loading ${familyDesigns.length} design(s) from ${toDisplayName(familyId)} for: ${collar}_${shoulder}`);
 
   if (familyDesigns.length === 0) {
     designThumbnails.innerHTML = '<p style="color: #888; text-align: center; grid-column: 1/-1;">No designs available</p>';
@@ -598,8 +825,8 @@ function loadFamilyDesigns(familyId) {
         const response = await fetch(svgPath);
         const svgText = await response.text();
 
-        // Detect unique colors in the SVG
-        const colors = detectUniqueColors(svgText);
+        // Detect unique colors in the SVG (checks for override first)
+        const colors = await detectUniqueColorsWithOverride(svgText, svgPath);
         debugLog('Detected colors in design:', colors);
 
         // Store colors globally for use in showDesignCustomization
@@ -710,8 +937,25 @@ function initializeSelectDropdown() {
     }, 200);
   });
 
+  // Store previous value on focus for login guard
+  selectInput.addEventListener('focusin', () => {
+    selectInput.dataset.prevValue = selectInput.value;
+  });
+
   // Handle change event
-  selectInput.addEventListener('change', function () {
+  selectInput.addEventListener('change', async function (e) {
+    const allowed = await requireLoginGuard(e, selectInput);
+    if (!allowed) {
+      // Keep open briefly to allow visual feedback, then close
+      setTimeout(() => {
+        isSelectOpen = false;
+        customizationPanel.classList.remove('select-open');
+      }, 150);
+      return;
+    }
+
+    markDesignDirty();
+
     // Keep open briefly to allow visual feedback, then close
     setTimeout(() => {
       isSelectOpen = false;
@@ -747,8 +991,8 @@ backButton.addEventListener('click', () => {
     const ribbedCollarGroup = document.getElementById('ribbed-collar-group-designs');
     if (ribbedCollarGroup) ribbedCollarGroup.style.display = 'none';
 
-      // Design was manually selected, show thumbnails
-      designThumbnails.style.display = 'grid';
+    // Design was manually selected, show thumbnails
+    designThumbnails.style.display = 'grid';
   } else {
     // If showing designs, go back to families
     loadDesignFamilies();
@@ -1008,9 +1252,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   ribbedCollarCheckboxes.forEach(checkbox => {
     if (checkbox) {
-      checkbox.addEventListener('change', (e) => {
+      // Store previous checked state on focus for login guard
+      checkbox.addEventListener('focusin', () => {
+        checkbox.dataset.prevChecked = checkbox.checked.toString();
+      });
+
+      checkbox.addEventListener('change', async (e) => {
+        const allowed = await requireLoginGuard(e, checkbox);
+        if (!allowed) return;
+
         const isRibbed = e.target.checked;
-        console.log(`Ribbed collar checkbox changed: ${isRibbed}`);
+        debugLog(`Ribbed collar checkbox changed: ${isRibbed}`);
 
         // Sync all other checkboxes to match this one
         ribbedCollarCheckboxes.forEach(otherCheckbox => {
@@ -1023,6 +1275,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (window.jerseyViewer) {
           window.jerseyViewer.toggleCollarNormalMaps(isRibbed);
         }
+        markDesignDirty();
       });
     }
   });
@@ -1082,7 +1335,23 @@ function initializeColorsSelectDropdown() {
     }, 200);
   });
 
-  selectInput.addEventListener('change', function () {
+  // Store previous value on focus for login guard
+  selectInput.addEventListener('focusin', () => {
+    selectInput.dataset.prevValue = selectInput.value;
+  });
+
+  selectInput.addEventListener('change', async function (e) {
+    const allowed = await requireLoginGuard(e, selectInput);
+    if (!allowed) {
+      setTimeout(() => {
+        isSelectOpen = false;
+        customizationPanel.classList.remove('select-open');
+      }, 150);
+      return;
+    }
+
+    markDesignDirty();
+
     setTimeout(() => {
       isSelectOpen = false;
       customizationPanel.classList.remove('select-open');
@@ -1177,6 +1446,8 @@ if (logoUpload) {
     const file = e.target.files[0];
     if (file) {
       handleLogoFile(file, false);
+      // Reset input value to allow re-uploading the same file
+      e.target.value = '';
     }
   });
 }
@@ -1187,6 +1458,8 @@ if (logoUploadColors) {
     const file = e.target.files[0];
     if (file) {
       handleLogoFile(file, true);
+      // Reset input value to allow re-uploading the same file
+      e.target.value = '';
     }
   });
 }
@@ -1201,7 +1474,7 @@ async function handleLogoFile(file, isColorsTab = false) {
       if (window.readLogo) {
         window.readLogo(result.publicUrl);
       } else {
-        console.log('Logo uploaded. Public URL:', result.publicUrl);
+        debugLog('Logo uploaded. Public URL:', result.publicUrl);
         // You can add custom logic here to handle the logo in the 3D viewer
       }
     } else {
@@ -1234,8 +1507,9 @@ async function uploadLogoToSupabase(file) {
       throw new Error('Supabase client not available');
     }
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (!user || userError) {
+    // Use cached auth user to avoid repeated Supabase calls
+    const user = await (window.getCachedAuthUser ? window.getCachedAuthUser() : supabase.auth.getUser().then(({ data }) => data.user));
+    if (!user) {
       console.error('No user logged in');
       if (window.hideLoading) window.hideLoading();
       if (window.showLoginModal) {
@@ -1284,7 +1558,7 @@ async function uploadLogoToSupabase(file) {
       throw new Error('Failed to get public URL');
     }
 
-    console.log('Logo uploaded successfully. Public URL:', urlData.publicUrl);
+    debugLog('Logo uploaded successfully. Public URL:', urlData.publicUrl);
     return { success: true, message: 'Logo uploaded successfully', publicUrl: urlData.publicUrl };
   } catch (error) {
     console.error('Error uploading logo:', error);
@@ -1336,10 +1610,101 @@ function resizeImage(file) {
 }
 
 // ==================== SVG COLOR DETECTION ====================
+
+/**
+ * Loads design color override from design-colors.json (cached)
+ * @param {string} svgPath - Optional SVG path to look up override for
+ * @returns {Promise<Array|null>} Array of color objects if override exists, null otherwise
+ */
+async function getDesignColorOverride(svgPath) {
+  // Use provided path or fall back to global
+  const pathToCheck = svgPath || window.jerseyViewer?.currentSVGPath;
+  if (!pathToCheck) return null;
+
+  // Extract family/design from path (e.g., "../designs/svg/graphic/rush/..." → family="graphic", design="rush")
+  const match = pathToCheck.match(/designs\/svg\/([^/]+)\/([^/]+)\//);
+  if (!match) return null;
+
+  const family = match[1];
+  const design = match[2];
+
+  // Load override file (cached)
+  if (!window._designColorsCache) {
+    // Try multiple paths to support index.html, admin-design/index.html, and share/index.html
+    const pathsToTry = [
+      './designs/design-colors - override.json',           // From jersey-configurator/index.html
+      '../designs/design-colors - override.json',          // From jersey-configurator/admin-design/index.html or share/index.html
+      '../../designs/design-colors - override.json'        // Fallback for nested paths
+    ];
+
+    for (const path of pathsToTry) {
+      try {
+        const response = await fetch(path);
+        if (response.ok) {
+          window._designColorsCache = await response.json();
+          debugLog('📋 Loaded design-colors.json:', window._designColorsCache);
+          break;
+        }
+      } catch (e) {
+        // Try next path
+      }
+    }
+
+    // If all paths failed, use empty cache (auto-detection)
+    if (!window._designColorsCache) {
+      debugLog('⚠️ No design-colors.json found, using auto-detection');
+      window._designColorsCache = {};
+    }
+  }
+
+  // Hierarchical lookup: family > design
+  const override = window._designColorsCache[family]?.[design];
+  if (override) {
+    debugLog(`✅ Found color override for ${family}/${design}:`, override);
+  }
+  return override || null;
+}
+
+/**
+ * Normalizes CSS color names to hex codes
+ * @param {string} color - Color value (hex, named, or RGB)
+ * @returns {string} Normalized hex color code
+ */
+function normalizeColorToHex(color) {
+  // Already a hex code - return as-is (will be normalized later for 3-char format)
+  if (color.startsWith('#')) {
+    return color;
+  }
+
+  // Common CSS named colors to hex mapping
+  const colorMap = {
+    'gold': '#ffd700',
+    'silver': '#c0c0c0',
+    'white': '#ffffff',
+    'black': '#000000',
+    'red': '#ff0000',
+    'green': '#008000',
+    'blue': '#0000ff',
+    'yellow': '#ffff00',
+    'cyan': '#00ffff',
+    'magenta': '#ff00ff',
+    'orange': '#ffa500',
+    'purple': '#800080',
+    'pink': '#ffc0cb',
+    'brown': '#a52a2a',
+    'gray': '#808080',
+    'grey': '#808080'
+  };
+
+  return colorMap[color] || color;
+}
+
 /**
  * Detects SVG classes and their colors from CSS style blocks, sorted by dominance
+ * Also extracts gradient stop-colors from linearGradient and radialGradient elements
+ * Checks for manual overrides in design-colors.json first
  * @param {SVGElement|string} svgElement - SVG DOM element or SVG string
- * @returns {Array<Object>} Array of class info objects with {className, color, dominance, elementCount}
+ * @returns {Array<Object>} Array of class info objects with {className, color, dominance, elementCount, isGradient, gradientIds}
  */
 function detectUniqueColors(svgElement) {
   let svgDoc;
@@ -1369,27 +1734,113 @@ function detectUniqueColors(svgElement) {
     const cssContent = styleMatch[1];
 
     // Extract class definitions with fill colors
-    // Matches patterns like: .st0{...fill:#FFD700...} or .st2{...fill:#2698D1...}
-    const classRegex = /\.([a-zA-Z0-9_-]+)\s*\{[^}]*fill:\s*([#a-fA-F0-9]+)[^}]*\}/g;
+    // Matches patterns like: .st0{...fill:#FFD700...} or .st2{...fill:gold...}
+    // Updated regex to capture hex codes AND named colors (like 'gold', 'red', etc.)
+    const fillClassRegex = /\.([a-zA-Z0-9_-]+)\s*\{[^}]*fill:\s*([^;}\s]+)[^}]*\}/g;
 
     let match;
-    while ((match = classRegex.exec(cssContent)) !== null) {
+    while ((match = fillClassRegex.exec(cssContent)) !== null) {
       const className = match[1];
-      const color = match[2].toLowerCase();
+      let color = match[2].trim().toLowerCase();
+
+      // Normalize named colors to hex (e.g., 'gold' -> '#ffd700')
+      color = normalizeColorToHex(color);
+
+      // Normalize 3-char hex to 6-char (e.g., #fff -> #ffffff)
+      if (/^#[a-fA-F0-9]{3}$/.test(color)) {
+        color = '#' + color[1] + color[1] + color[2] + color[2] + color[3] + color[3];
+      }
 
       // Skip if color is 'none' or similar
       if (color && color !== 'none') {
+        // For CSS cascade: later rules override earlier ones
+        // So we always update the color if this class was already detected
         classMap.set(className, {
           className: className,
           color: color,
           elementCount: 0,
-          totalArea: 0
+          totalArea: 0,
+          isGradient: false,
+          colorType: 'fill' // Track that this is a fill color
+        });
+      }
+    }
+
+    // Also extract class definitions with stroke colors
+    // Matches patterns like: .st1{...stroke:#80C692...} or .st2{stroke:red;...}
+    // Updated to capture both hex codes AND named colors
+    const strokeClassRegex = /\.([a-zA-Z0-9_-]+)\s*\{[^}]*stroke:\s*([^;}\s]+)[^}]*\}/g;
+
+    while ((match = strokeClassRegex.exec(cssContent)) !== null) {
+      const className = match[1];
+      let color = match[2].trim().toLowerCase();
+
+      // Normalize named colors to hex (e.g., 'gold' -> '#ffd700')
+      color = normalizeColorToHex(color);
+
+      // Normalize 3-char hex to 6-char (e.g., #fff -> #ffffff)
+      if (/^#[a-fA-F0-9]{3}$/.test(color)) {
+        color = '#' + color[1] + color[1] + color[2] + color[2] + color[3] + color[3];
+      }
+
+      // Skip if color is 'none' or similar
+      if (color && color !== 'none') {
+        // Create a stroke-specific entry with a modified className to differentiate
+        // Use format: className__stroke to distinguish stroke colors from fill colors
+        const strokeClassName = className + '__stroke';
+        classMap.set(strokeClassName, {
+          className: strokeClassName,
+          originalClassName: className, // Store the original class name
+          color: color,
+          elementCount: 0,
+          totalArea: 0,
+          isGradient: false,
+          colorType: 'stroke' // Track that this is a stroke color
         });
       }
     }
   }
 
   debugLog('Parsed CSS classes:', Array.from(classMap.keys()));
+
+  // Step 1b: Extract gradient stop-colors
+  const gradientColorMap = new Map(); // color -> {count, gradientIds}
+
+  if (svgDoc) {
+    const gradientStops = svgDoc.querySelectorAll('linearGradient stop, radialGradient stop');
+
+    gradientStops.forEach(stop => {
+      let color = stop.getAttribute('stop-color');
+      if (color && color !== 'none') {
+        // Normalize color to lowercase hex
+        color = color.toLowerCase();
+
+        // Normalize 3-char hex to 6-char
+        if (/^#[a-fA-F0-9]{3}$/.test(color)) {
+          color = '#' + color[1] + color[1] + color[2] + color[2] + color[3] + color[3];
+        }
+
+        // Get parent gradient ID
+        const gradient = stop.parentElement;
+        const gradientId = gradient ? gradient.getAttribute('id') : null;
+
+        if (gradientColorMap.has(color)) {
+          const info = gradientColorMap.get(color);
+          info.count++;
+          if (gradientId && !info.gradientIds.includes(gradientId)) {
+            info.gradientIds.push(gradientId);
+          }
+        } else {
+          gradientColorMap.set(color, {
+            count: 1,
+            gradientIds: gradientId ? [gradientId] : []
+          });
+        }
+      }
+    });
+
+    debugLog('Parsed gradient colors:', Array.from(gradientColorMap.keys()));
+  }
 
   // Helper function to estimate element area
   function estimateElementArea(element) {
@@ -1405,15 +1856,91 @@ function detectUniqueColors(svgElement) {
     return 100;
   }
 
+  // Helper function to check if a class has a fill defined in the style block
+  function classHasFillInStyle(className) {
+    return classMap.has(className);
+  }
+
+  // Helper function to get the computed fill of an element
+  // Returns the fill color if explicitly set, or null if element defaults to black
+  function getElementFill(element, cssContent) {
+    // Check for inline fill attribute
+    const inlineFill = element.getAttribute('fill');
+    if (inlineFill && inlineFill !== 'none') {
+      return inlineFill.toLowerCase();
+    }
+
+    // Check for inline style with fill
+    const style = element.getAttribute('style');
+    if (style) {
+      const fillMatch = style.match(/fill:\s*([^;]+)/i);
+      if (fillMatch && fillMatch[1] && fillMatch[1].trim() !== 'none') {
+        return fillMatch[1].trim().toLowerCase();
+      }
+    }
+
+    // Check if element has a class with defined fill
+    const classAttr = element.getAttribute('class');
+    if (classAttr) {
+      // Handle multiple classes
+      const classes = classAttr.split(/\s+/);
+      for (const cls of classes) {
+        if (classHasFillInStyle(cls)) {
+          return classMap.get(cls).color;
+        }
+      }
+    }
+
+    // No fill defined - element will default to black (SVG default)
+    return null;
+  }
+
+  // Track elements that default to black (no fill defined)
+  let defaultBlackCount = 0;
+  let defaultBlackArea = 0;
+
   // Step 2: Traverse SVG to count elements for each class
   function traverseElement(element) {
     // Get the class attribute
     const classAttr = element.getAttribute('class');
+    const tagName = element.tagName ? element.tagName.toLowerCase() : '';
 
-    if (classAttr && classMap.has(classAttr)) {
-      const classInfo = classMap.get(classAttr);
-      classInfo.elementCount++;
-      classInfo.totalArea += estimateElementArea(element);
+    // Only consider shape elements (path, polygon, rect, circle, ellipse, line, polyline)
+    const shapeElements = ['path', 'polygon', 'rect', 'circle', 'ellipse', 'line', 'polyline'];
+    const isShapeElement = shapeElements.includes(tagName);
+
+    if (isShapeElement) {
+      // Check for fill-based class (original class name)
+      if (classAttr && classMap.has(classAttr)) {
+        const classInfo = classMap.get(classAttr);
+        classInfo.elementCount++;
+        classInfo.totalArea += estimateElementArea(element);
+      }
+
+      // Also check for stroke-based class (className__stroke)
+      if (classAttr) {
+        const strokeClassName = classAttr + '__stroke';
+        if (classMap.has(strokeClassName)) {
+          const classInfo = classMap.get(strokeClassName);
+          classInfo.elementCount++;
+          classInfo.totalArea += estimateElementArea(element);
+        }
+      }
+
+      // If no fill class found, check if element defaults to black
+      if (!classAttr || !classMap.has(classAttr)) {
+        // Check if this element has no fill defined (defaults to black)
+        const fill = getElementFill(element, null);
+        if (fill === null) {
+          // Element has no fill, defaults to black
+          defaultBlackCount++;
+          defaultBlackArea += estimateElementArea(element);
+        } else if (fill !== 'none') {
+          // Element has inline fill - check if we need to track it
+          // For now, we focus on the CSS classes approach
+          // But we could add inline colors to a separate tracking if needed
+        }
+      }
     }
 
     // Recursively traverse child elements
@@ -1427,6 +1954,18 @@ function detectUniqueColors(svgElement) {
     traverseElement(svgDoc);
   }
 
+  // If there are elements that default to black, add a pseudo-class entry
+  if (defaultBlackCount > 0) {
+    classMap.set('__default_black__', {
+      className: '__default_black__',
+      color: '#000000',
+      elementCount: defaultBlackCount,
+      totalArea: defaultBlackArea,
+      isGradient: false
+    });
+    debugLog(`Found ${defaultBlackCount} elements defaulting to black with total area ${defaultBlackArea}`);
+  }
+
   // Convert Map to Array and calculate dominance score
   const classArray = Array.from(classMap.values())
     .filter(classInfo => classInfo.elementCount > 0) // Only include classes that are actually used
@@ -1437,16 +1976,109 @@ function detectUniqueColors(svgElement) {
       return classInfo;
     });
 
-  // Sort by dominance (highest first)
-  classArray.sort((a, b) => b.dominance - a.dominance);
+  // Step 3: Process gradient colors - merge with CSS colors if duplicates exist
+  // Sort gradient colors by count (most used first)
+  const sortedGradientColors = Array.from(gradientColorMap.entries())
+    .sort((a, b) => b[1].count - a[1].count);
 
-  debugLog('Detected SVG classes by dominance:', classArray);
+  let gradientColorIndex = 0;
+  sortedGradientColors.forEach(([color, info]) => {
+    // Check if this color already exists as a CSS fill color
+    const existingEntry = classArray.find(entry => entry.color === color && !entry.isGradient);
+
+    if (existingEntry) {
+      // Merge: mark this color as appearing in both CSS and gradients
+      existingEntry.isGradient = true;
+      existingEntry.gradientIds = info.gradientIds;
+      existingEntry.isMerged = true; // Flag to indicate merged color
+      debugLog(`Merged gradient color ${color} with existing CSS color ${existingEntry.className}`);
+    } else {
+      // Add as gradient-only entry with special className prefix
+      classArray.push({
+        className: `__gradient_color_${gradientColorIndex}__`,
+        color: color,
+        elementCount: info.count,
+        totalArea: info.count * 100, // Approximate area based on count
+        dominance: info.count * 100,
+        isGradient: true,
+        gradientIds: info.gradientIds,
+        isMerged: false
+      });
+      gradientColorIndex++;
+      debugLog(`Added gradient-only color ${color} with ${info.count} occurrences in gradients: ${info.gradientIds.join(', ')}`);
+    }
+  });
+
+  // Sort alphabetically by className for consistent ordering across pages
+  // This ensures colors are always mapped the same way
+  classArray.sort((a, b) => a.className.localeCompare(b.className));
+
+  // SPECIAL CASE: Onyx design - only detect st3, st13, st8, st9
+  // Check if this is an Onyx design by examining the currentDesign path
+  const isOnyxDesign = window.currentDesign && window.currentDesign.includes('/onyx/');
+
+  if (isOnyxDesign) {
+    const onyxAllowedClasses = ['st3', 'st13', 'st8', 'st9'];
+    const originalCount = classArray.length;
+
+    classArray = classArray.filter(classInfo =>
+      onyxAllowedClasses.includes(classInfo.className)
+    );
+
+    debugLog(`🎯 Onyx special case: Filtered from ${originalCount} to ${classArray.length} classes`);
+    debugLog(`   Kept classes: ${classArray.map(c => c.className).join(', ')}`);
+  }
+
+  debugLog('✅ Detected SVG classes (alphabetically sorted):', classArray.map(c => c.className));
+  debugLog('Detected SVG classes by className:', classArray);
 
   return classArray;
 }
 
-// Make function available globally for use in other scripts
+/**
+ * Async wrapper that checks for override first, then falls back to auto-detection
+ * @param {SVGElement|string} svgElement - SVG DOM element or SVG string
+ * @param {string} svgPath - Optional SVG path for override lookup
+ * @returns {Promise<Array<Object>>} Array of class info objects
+ */
+async function detectUniqueColorsWithOverride(svgElement, svgPath) {
+  // Check if overrides are enabled globally
+  if (window.USE_DESIGN_OVERRIDES === false) {
+    debugLog('⚠️ Design overrides disabled globally - using auto-detection');
+    return detectUniqueColors(svgElement);
+  }
+
+  // DISABLED: Color override functionality - using auto-detection only
+  // Check for manual override first
+  const override = await getDesignColorOverride(svgPath);
+
+  if (override && Array.isArray(override)) {
+    debugLog('🎯 Using manual color override instead of auto-detection');
+
+    // Enrich override colors with derived flags (use explicit if provided, else derive)
+    return override.map((item, index) => {
+      const derivedIsGradient = item.className.startsWith('__gradient_color_');
+      return {
+        className: item.className,
+        color: item.color,
+        elementCount: 1,
+        totalArea: 100,
+        dominance: 100 - index, // Maintain override order
+        isGradient: item.isGradient !== undefined ? item.isGradient : derivedIsGradient,
+        gradientIds: item.gradientIds || [],
+        isMerged: item.isMerged || false,
+        shouldSkip: item.shouldSkip || false
+      };
+    });
+  }
+
+  // Always use auto-detection
+  return detectUniqueColors(svgElement);
+}
+
+// Make functions available globally for use in other scripts
 window.detectUniqueColors = detectUniqueColors;
+window.detectUniqueColorsWithOverride = detectUniqueColorsWithOverride;
 
 /**
  * Populates the color-selection-group with dynamic color pickers based on detected SVG classes
@@ -1466,15 +2098,32 @@ function populateColorPickers(classArray) {
   // Store class information for mapping (used when updating SVG)
   window.currentSVGClassMap = {};
 
+  // Track visible color count for sequential labeling
+  let visibleColorCount = 0;
+
   // Generate color picker for each detected class
   classArray.forEach((classInfo, index) => {
     const pickerId = `svg-class-${index}`;
 
-    // Store class information
+    // Store class information (including gradient info if available)
+    // Always store in map for index alignment (even if skipped in UI)
     window.currentSVGClassMap[pickerId] = {
       className: classInfo.className,
-      originalColor: classInfo.color
+      originalColor: classInfo.color,
+      isGradient: classInfo.isGradient || false,
+      gradientIds: classInfo.gradientIds || [],
+      isMerged: classInfo.isMerged || false,  // Track if color appears in both CSS and gradients
+      shouldSkip: classInfo.shouldSkip || false  // Track if should be hidden from UI
     };
+
+    // Skip UI generation for items marked with shouldSkip
+    if (classInfo.shouldSkip) {
+      debugLog(`⏭️ Skipping UI for ${classInfo.className} (shouldSkip: true)`);
+      return;
+    }
+
+    // Increment visible color counter for non-skipped items
+    visibleColorCount++;
 
     // Create color option item
     const colorItem = document.createElement('div');
@@ -1489,14 +2138,15 @@ function populateColorPickers(classArray) {
     colorInput.dataset.className = classInfo.className; // Store class name (st0, st2, etc.)
     colorInput.dataset.colorIndex = `color${index + 1}`; // Store color index (color1, color2, etc.)
     colorInput.dataset.originalColor = classInfo.color; // Store original color
+    colorInput.dataset.isGradient = classInfo.isGradient ? 'true' : 'false'; // Store gradient flag
 
     // Create label with user-friendly name
     const label = document.createElement('label');
     label.htmlFor = pickerId;
     label.className = 'color-label-text';
 
-    // Use "Color 1", "Color 2" instead of "ST0", "ST2"
-    const colorLabel = `Color ${index + 1}`;
+    // Use sequential numbering for visible colors
+    const colorLabel = `Color ${visibleColorCount}`;
 
     const labelTextEn = document.createElement('span');
     labelTextEn.setAttribute('data-en', '');
@@ -1504,34 +2154,47 @@ function populateColorPickers(classArray) {
 
     const labelTextFr = document.createElement('span');
     labelTextFr.setAttribute('data-fr', '');
-    labelTextFr.textContent = colorLabel;
+    labelTextFr.textContent = `Couleur ${visibleColorCount}`;
 
     label.appendChild(labelTextEn);
     label.appendChild(labelTextFr);
 
+    // Store original color on focus for login guard
+    colorInput.addEventListener('focusin', () => {
+      colorInput.dataset.prevValue = colorInput.value;
+    });
+
     // Color update handler (shared by both events)
-    const handleColorUpdate = (e) => {
+    const handleColorUpdate = async (e) => {
+      const allowed = await requireLoginGuard(e, colorInput);
+      if (!allowed) return;
+
       const className = e.target.dataset.className;
       const newColor = e.target.value;
 
       // Update the SVG color by class
       updateSVGColorByClass(className, newColor);
+      markDesignDirty();
     };
 
     // Real-time updates while dragging (input event)
     colorInput.addEventListener('input', handleColorUpdate);
 
     // Final update when color picker closes (change event)
-    colorInput.addEventListener('change', (e) => {
+    colorInput.addEventListener('change', async (e) => {
+      const allowed = await requireLoginGuard(e, colorInput);
+      if (!allowed) return;
+
       const className = e.target.dataset.className;
       const oldColor = e.target.dataset.originalColor;
       const newColor = e.target.value;
 
-      console.log(`Color change for class "${className}": ${oldColor} → ${newColor}`);
+      debugLog(`Color change for class "${className}": ${oldColor} → ${newColor}`);
 
       // Update the stored original color to the new color
       e.target.dataset.originalColor = newColor;
       window.currentSVGClassMap[pickerId].originalColor = newColor;
+      markDesignDirty();
     });
 
     // Append elements
@@ -1558,8 +2221,9 @@ function populateColorPickers(classArray) {
  * Modifies the hidden SVG DOM, then triggers re-rasterization
  * @param {string} className - The SVG class name (e.g., "st0", "st2")
  * @param {string} newColor - The new color (hex format)
+ * @param {boolean} skipRasterize - If true, skip the re-rasterization (useful for batching updates)
  */
-function updateSVGColorByClass(className, newColor) {
+function updateSVGColorByClass(className, newColor, skipRasterize = false) {
   // Access the hidden SVG element
   const svgElement = window.jerseyViewer?.currentSVGElement;
 
@@ -1570,6 +2234,180 @@ function updateSVGColorByClass(className, newColor) {
 
   debugLog(`Updating class "${className}" to color: ${newColor}`);
 
+  // Special handling for __default_black__ pseudo-class
+  // This class represents elements without any fill that default to black
+  if (className === '__default_black__') {
+    const shapeElements = ['path', 'polygon', 'rect', 'circle', 'ellipse', 'line', 'polyline'];
+    let updatedCount = 0;
+
+    // Helper to check if element was originally a default-black element
+    // or if it has no fill defined (for first-time detection)
+    function isDefaultBlackElement(element) {
+      // Check if already marked as default-black (from previous update)
+      if (element.hasAttribute('data-default-black')) {
+        return true;
+      }
+
+      // First-time check: element has no fill defined at all
+      // Check inline fill attribute
+      if (element.hasAttribute('fill') && element.getAttribute('fill') !== '') {
+        return false;
+      }
+
+      // Check inline style with fill
+      const style = element.getAttribute('style');
+      if (style && /fill\s*:/i.test(style)) {
+        return false;
+      }
+
+      // Check if element has a class with fill defined in stylesheet
+      const classAttr = element.getAttribute('class');
+      if (classAttr) {
+        const styleElement = svgElement.querySelector('style');
+        if (styleElement) {
+          const cssContent = styleElement.textContent;
+          const fillRegex = new RegExp(`\\.${classAttr}\\s*\\{[^}]*fill\\s*:`);
+          if (fillRegex.test(cssContent)) {
+            return false;
+          }
+        }
+      }
+
+      // No fill defined - this is a default black element
+      return true;
+    }
+
+    // Traverse and update elements with no fill defined
+    function updateDefaultBlackElements(element) {
+      const tagName = element.tagName ? element.tagName.toLowerCase() : '';
+
+      if (shapeElements.includes(tagName)) {
+        if (isDefaultBlackElement(element)) {
+          element.setAttribute('fill', newColor);
+          // Mark this element so we can find it again on subsequent updates
+          element.setAttribute('data-default-black', 'true');
+          updatedCount++;
+        }
+      }
+
+      // Recursively process children
+      for (let i = 0; i < element.children.length; i++) {
+        updateDefaultBlackElements(element.children[i]);
+      }
+    }
+
+    updateDefaultBlackElements(svgElement);
+    debugLog(`Updated ${updatedCount} elements with default black fill to ${newColor}`);
+
+    // Trigger re-rasterization unless skipped (for batching)
+    if (!skipRasterize) {
+      if (window.jerseyViewer && window.jerseyViewer.rasterizeAndLoadSVG) {
+        debugLog('Re-rasterizing SVG with new colors...');
+        window.jerseyViewer.rasterizeAndLoadSVG();
+      } else {
+        console.warn('rasterizeAndLoadSVG method not available');
+      }
+    }
+    return;
+  }
+
+  // Special handling for __gradient_color_X__ pseudo-class
+  // This class represents gradient stop-colors
+  if (className.startsWith('__gradient_color_') && className.endsWith('__')) {
+    // Get the original color from the class map
+    const pickerId = Object.keys(window.currentSVGClassMap || {}).find(
+      id => window.currentSVGClassMap[id].className === className
+    );
+    const classInfo = pickerId ? window.currentSVGClassMap[pickerId] : null;
+    const originalColor = classInfo ? classInfo.originalColor : null;
+
+    if (!originalColor) {
+      console.warn(`Could not find original color for gradient class ${className}`);
+      return;
+    }
+
+    let updatedCount = 0;
+
+    // Find all gradient stops with the original color and update them
+    const gradientStops = svgElement.querySelectorAll('linearGradient stop, radialGradient stop');
+
+    gradientStops.forEach(stop => {
+      let stopColor = stop.getAttribute('stop-color');
+      if (stopColor) {
+        // Normalize for comparison
+        stopColor = stopColor.toLowerCase();
+        if (/^#[a-fA-F0-9]{3}$/.test(stopColor)) {
+          stopColor = '#' + stopColor[1] + stopColor[1] + stopColor[2] + stopColor[2] + stopColor[3] + stopColor[3];
+        }
+
+        // Also normalize original color for comparison
+        let origColorNorm = originalColor.toLowerCase();
+        if (/^#[a-fA-F0-9]{3}$/.test(origColorNorm)) {
+          origColorNorm = '#' + origColorNorm[1] + origColorNorm[1] + origColorNorm[2] + origColorNorm[2] + origColorNorm[3] + origColorNorm[3];
+        }
+
+        if (stopColor === origColorNorm) {
+          stop.setAttribute('stop-color', newColor);
+          // Also update style if present, just in case
+          if (stop.style) {
+            stop.style.stopColor = newColor;
+          }
+          updatedCount++;
+        }
+      }
+    });
+
+    debugLog(`[DEBUG] Updated ${updatedCount} gradient stops from ${originalColor} to ${newColor}`);
+
+    // NEW: If isMerged, also update all CSS fill rules that use this color
+    // This handles solid-filled elements like .st48/.st49 for gray and .st74/.st75 for red
+    if (classInfo && classInfo.isMerged) {
+      const styleElement = svgElement.querySelector('style');
+      if (styleElement) {
+        let cssContent = styleElement.textContent;
+
+        // Normalize original color for regex matching
+        let origColorNorm = originalColor.toLowerCase();
+        if (/^#[a-fA-F0-9]{3}$/.test(origColorNorm)) {
+          origColorNorm = '#' + origColorNorm[1] + origColorNorm[1] + origColorNorm[2] + origColorNorm[2] + origColorNorm[3] + origColorNorm[3];
+        }
+
+        // Escape for regex
+        const escapedOrig = origColorNorm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        // Update all fill properties that match this color
+        const fillRegex = new RegExp(`(fill:\\s*)(${escapedOrig})`, 'gi');
+        const newCssContent = cssContent.replace(fillRegex, (match, prefix) => `${prefix}${newColor}`);
+
+        if (newCssContent !== cssContent) {
+          styleElement.textContent = newCssContent;
+          debugLog(`[DEBUG] ✅ Updated CSS fill rules for merged gradient color ${originalColor} → ${newColor}`);
+        }
+      }
+    }
+
+    // Update the stored original color so subsequent changes work correctly
+    if (pickerId && window.currentSVGClassMap[pickerId]) {
+      window.currentSVGClassMap[pickerId].originalColor = newColor;
+    }
+
+    // Trigger re-rasterization unless skipped (for batching)
+    if (!skipRasterize) {
+      if (window.jerseyViewer && window.jerseyViewer.rasterizeAndLoadSVG) {
+        debugLog('[DEBUG] Re-rasterizing SVG with new colors...');
+        // Small delay to ensure DOM updates are applied before serialization
+        setTimeout(() => {
+          window.jerseyViewer.rasterizeAndLoadSVG();
+        }, 0);
+      } else {
+        console.warn('[DEBUG] rasterizeAndLoadSVG method not available');
+      }
+    }
+    return;
+  }
+
+
+  // Standard handling for CSS class-based colors
   // Find and update the style block
   const styleElement = svgElement.querySelector('style');
 
@@ -1581,26 +2419,103 @@ function updateSVGColorByClass(className, newColor) {
   // Get current CSS content
   let cssContent = styleElement.textContent;
 
-  // Update the fill color for this class
-  // Match patterns like: .st0{...fill:#FFD700...} or .st2{fill:#2698D1;...}
-  const classRegex = new RegExp(`(\\.${className}\\s*\\{[^}]*fill:\\s*)([#a-fA-F0-9]+)([^}]*\\})`, 'g');
+  // Check if this is a stroke color (className ends with __stroke)
+  const isStrokeColor = className.endsWith('__stroke');
+  const actualClassName = isStrokeColor ? className.replace('__stroke', '') : className;
+  const propertyName = isStrokeColor ? 'stroke' : 'fill';
+
+  // Update the color for this class
+  // Match patterns like: .st0{...fill:#FFD700...} or .st2{stroke:gold;...} or .st9{fill:gold}
+  // Updated regex to capture both hex codes AND named colors
+  const classRegex = new RegExp(`(\\.${actualClassName}\\s*\\{[^}]*${propertyName}:\\s*)([^;}\s]+)([^}]*\\})`, 'g');
 
   const updatedCSS = cssContent.replace(classRegex, (match, before, oldColor, after) => {
-    debugLog(`  Replacing ${oldColor} with ${newColor} in class .${className}`);
+    debugLog(`  Replacing ${oldColor} with ${newColor} in class .${actualClassName} (${propertyName})`);
     return before + newColor + after;
   });
 
   // Update the style element
   styleElement.textContent = updatedCSS;
 
-  // Trigger re-rasterization
-  if (window.jerseyViewer && window.jerseyViewer.rasterizeAndLoadSVG) {
-    debugLog('Re-rasterizing SVG with new colors...');
-    window.jerseyViewer.rasterizeAndLoadSVG();
-  } else {
-    console.warn('rasterizeAndLoadSVG method not available');
+  // NEW: If this is a merged color, also update gradient stops
+  const pickerId = Object.keys(window.currentSVGClassMap || {}).find(
+    id => window.currentSVGClassMap[id].className === className
+  );
+  const classInfo = pickerId ? window.currentSVGClassMap[pickerId] : null;
+
+  if (classInfo && classInfo.isMerged) {
+    debugLog(`🔀 Merged color detected - also updating gradient stops for ${className}`);
+
+    // Find the original color to replace in gradients
+    const originalColor = classInfo.originalColor;
+
+    // NEW: Also update any CSS classes using the original color as fill
+    // This ensures solid elements (like st49) update along with gradient elements
+    if (styleElement) {
+      const currentStyle = styleElement.textContent;
+      // Escape for regex to handle potential special chars
+      const escapedOrig = originalColor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const fillRegex = new RegExp(`(fill:\\s*)(${escapedOrig})`, 'gi');
+
+      if (fillRegex.test(currentStyle)) {
+        const newStyle = currentStyle.replace(fillRegex, (match, prefix) => `${prefix}${newColor}`);
+        if (newStyle !== currentStyle) {
+          styleElement.textContent = newStyle;
+          debugLog(`✅ Updated global CSS fills for merged color ${originalColor} to ${newColor}`);
+        }
+      }
+    }
+
+    // Update gradient stops
+    const gradientStops = svgElement.querySelectorAll('linearGradient stop, radialGradient stop');
+    let updatedCount = 0;
+
+    gradientStops.forEach(stop => {
+      let stopColor = stop.getAttribute('stop-color');
+      if (stopColor) {
+        // Normalize for comparison
+        stopColor = stopColor.toLowerCase();
+        if (/^#[a-fA-F0-9]{3}$/.test(stopColor)) {
+          stopColor = '#' + stopColor[1] + stopColor[1] + stopColor[2] + stopColor[2] + stopColor[3] + stopColor[3];
+        }
+
+        // Normalize original color
+        let origColorNorm = originalColor.toLowerCase();
+        if (/^#[a-fA-F0-9]{3}$/.test(origColorNorm)) {
+          origColorNorm = '#' + origColorNorm[1] + origColorNorm[1] + origColorNorm[2] + origColorNorm[2] + origColorNorm[3] + origColorNorm[3];
+        }
+
+        if (stopColor === origColorNorm) {
+          stop.setAttribute('stop-color', newColor);
+          if (stop.style) {
+            stop.style.stopColor = newColor;
+          }
+          updatedCount++;
+        }
+      }
+    });
+
+    debugLog(`✅ Updated ${updatedCount} gradient stops for merged color ${className}`);
+
+    // Update the stored original color in the map
+    if (classInfo) {
+      classInfo.originalColor = newColor;
+    }
+  }
+
+  // Trigger re-rasterization unless skipped (for batching)
+  if (!skipRasterize) {
+    if (window.jerseyViewer && window.jerseyViewer.rasterizeAndLoadSVG) {
+      debugLog('Re-rasterizing SVG with new colors...');
+      window.jerseyViewer.rasterizeAndLoadSVG();
+    } else {
+      console.warn('rasterizeAndLoadSVG method not available');
+    }
   }
 }
+
+// Make function available globally for use in share page
+window.updateSVGColorByClass = updateSVGColorByClass;
 
 /**
  * Captures the current design colors from the color pickers
@@ -1609,15 +2524,26 @@ function updateSVGColorByClass(className, newColor) {
 function captureCurrentDesignColors() {
   const colors = [];
 
-  // Get all color pickers in order
-  const colorPickers = document.querySelectorAll('#color-selection-group .color-picker-input');
+  // Iterate over ALL colors (including skipped ones) to maintain index alignment
+  if (window.currentSVGColors && window.currentSVGColors.length > 0) {
+    window.currentSVGColors.forEach((classInfo, index) => {
+      const pickerId = `svg-class-${index}`;
+      const picker = document.getElementById(pickerId);
 
-  colorPickers.forEach(picker => {
-    colors.push(picker.value); // Hex color like "#FFD700"
-  });
+      // If picker exists (not skipped), get its current value
+      // If skipped, use the original color from classInfo
+      const color = picker ? picker.value : classInfo.color;
+      colors.push(color);
+    });
+  } else {
+    // Fallback: use visible pickers only (old behavior)
+    const colorPickers = document.querySelectorAll('#color-selection-group .color-picker-input');
+    colorPickers.forEach(picker => {
+      colors.push(picker.value);
+    });
+  }
 
-  console.log(`📸 Capturing ${colorPickers.length} color pickers, got ${colors.length} colors:`, colors);
-  debugLog(`📸 Captured ${colors.length} design colors:`, colors);
+  debugLog(`📸 Captured ${colors.length} design colors (including skipped):`, colors);
   return colors;
 }
 
@@ -1625,55 +2551,107 @@ function captureCurrentDesignColors() {
  * Restores saved design colors to the SVG and updates the UI
  * @param {Array<string>} designColors - Array of hex color strings
  */
-function restoreDesignColors(designColors) {
+async function restoreDesignColors(designColors) {
+  debugLog('🎨 restoreDesignColors() called with:', designColors);
   debugLog('🎨 restoreDesignColors() called with:', designColors);
 
   if (!designColors || designColors.length === 0) {
+    console.warn('⚠️ No design colors to restore (empty or null)');
     debugLog('⚠️ No design colors to restore (empty or null)');
     debugLog('No design colors to restore');
     return;
   }
 
-  if (!window.currentSVGClassMap) {
-    debugLog('⚠️ No SVG class map available, cannot restore colors');
-    debugLog('⚠️ No SVG class map available, cannot restore colors');
+  // ALWAYS Force rebuild of class map to ensure it's in sync with the current DOM
+  // This is critical because if the SVG was reloaded, the old map might point to colors
+  // that no longer exist in the fresh DOM (e.g. Map has red, DOM resets to black).
+  if (window.jerseyViewer && window.jerseyViewer.currentSVGElement) {
+    debugLog('🔄 Forcing map rebuild in restoreDesignColors for synchronization');
+
+    // CRITICAL FIX: Use detectUniqueColorsWithOverride to respect design-colors.json
+    // This ensures saved colors map to the correct classes defined in the override
+    const svgPath = window.jerseyViewer.currentSVGPath || window.currentDesign;
+    const detectedColors = await detectUniqueColorsWithOverride(
+      window.jerseyViewer.currentSVGElement,
+      svgPath
+    );
+
+    window.currentSVGColors = detectedColors;
+
+    window.currentSVGClassMap = {};
+    detectedColors.forEach((classInfo, index) => {
+      const pickerId = `svg-class-${index}`;
+      window.currentSVGClassMap[pickerId] = {
+        className: classInfo.className,
+        originalColor: classInfo.color,
+        isGradient: classInfo.isGradient || false,
+        gradientIds: classInfo.gradientIds || [],
+        isMerged: classInfo.isMerged || false  // Preserve merged flag
+      };
+    });
+    debugLog('✅ Rebuilt SVG class map for restoration');
+  } else {
+    console.warn('⚠️ No SVG element available to build class map');
     return;
   }
 
   debugLog(`🎨 Restoring ${designColors.length} design colors...`);
   debugLog(`🎨 Restoring ${designColors.length} design colors...`);
 
-  // Get all color pickers in order
+  // Get all color pickers (might be stale if UI hasn't refreshed)
   const colorPickers = document.querySelectorAll('#color-selection-group .color-picker-input');
-  debugLog(`🔍 Found ${colorPickers.length} color pickers to update`);
 
-  // Apply each saved color
-  colorPickers.forEach((picker, index) => {
+  // Use the freshly detected colors as the source of truth for structure
+  // This ensures we iterate over valid classes in the correct order
+  const itemsToProcess = window.currentSVGColors || [];
+
+  debugLog(`🔍 Found ${itemsToProcess.length} valid classes to restore`);
+  const validColorCount = Math.min(itemsToProcess.length instanceof Function ? itemsToProcess.length() : itemsToProcess.length, designColors.length);
+
+  itemsToProcess.forEach((classInfo, index) => {
     if (index < designColors.length) {
       const savedColor = designColors[index];
-      const className = picker.dataset.className;
+      const className = classInfo.className;
+      const pickerId = `svg-class-${index}`;
 
+      debugLog(`  🎨 Restoring color ${index + 1}: ${savedColor} to class ${className}`);
+
+      // Update picker UI if available
+      const picker = document.getElementById(pickerId);
+      if (picker) {
+        picker.value = savedColor;
+        // Important: Update originalColor dataset so subsequent changes track correctly
+        picker.dataset.originalColor = savedColor;
+      }
+
+      const isLastColor = (index === validColorCount - 1);
+
+      debugLog(`  🎨 Restoring color ${index + 1}: ${savedColor} to class ${className}`);
       debugLog(`  Restoring color ${index}: ${savedColor} to class ${className}`);
 
       if (className && savedColor) {
-        // Update the SVG color
-        updateSVGColorByClass(className, savedColor);
+        // Update the SVG color (HEADLESS UPDATE: skip rasterization for efficiency)
+        // We will trigger a SINGLE rasterization after the loop completes
+        updateSVGColorByClass(className, savedColor, true);
 
-        // Update the color picker UI
-        picker.value = savedColor;
-        picker.dataset.originalColor = savedColor;
-
-        // Update the stored class map
-        const pickerId = picker.id;
+        // Update map from picker ID for future reference
         if (window.currentSVGClassMap[pickerId]) {
           window.currentSVGClassMap[pickerId].originalColor = savedColor;
         }
-
-        debugLog(`  ✓ Restored ${className}: ${savedColor}`);
-        debugLog(`  ✓ Restored ${className}: ${savedColor}`);
       }
     }
   });
+
+  // CRITICAL: Final rasterization after all colors are updated
+  // This ensures the 3D model reflects the restored colors
+  if (window.jerseyViewer && window.jerseyViewer.rasterizeAndLoadSVG) {
+    debugLog('🔄 Triggering final rasterization for restored design...');
+    setTimeout(() => {
+      window.jerseyViewer.rasterizeAndLoadSVG();
+    }, 50); // Small delay to guarantee DOM reflow
+  } else {
+    console.warn('rasterizeAndLoadSVG not available for final render');
+  }
 
   debugLog(`✅ Design colors restored successfully`);
   debugLog(`✅ Design colors restored successfully`);
@@ -1707,7 +2685,7 @@ function updateSVGColor(oldColor, newColor) {
   const oldColorNormalized = normalizeForComparison(oldColor);
   const newColorNormalized = normalizeForComparison(newColor);
 
-  console.log(`Updating color across all parts: ${oldColor} → ${newColor}`);
+  debugLog(`Updating color across all parts: ${oldColor} → ${newColor}`);
 
   // Iterate through all part canvases (front, back, sleeves, etc.)
   Object.entries(partCanvases).forEach(([partName, canvas]) => {
@@ -1736,7 +2714,7 @@ function updateSVGColor(oldColor, newColor) {
     // Re-render this canvas if it was updated
     if (partUpdated) {
       canvas.renderAll();
-      console.log(`✓ Updated colors on ${partName}`);
+      debugLog(`✓ Updated colors on ${partName}`);
 
       // Update the texture for this part
       if (window.jerseyViewer.updateTexture) {
@@ -1746,9 +2724,9 @@ function updateSVGColor(oldColor, newColor) {
   });
 
   if (updated) {
-    console.log('✓ Color update complete');
+    debugLog('✓ Color update complete');
   } else {
-    console.log('⚠ No objects found with the old color');
+    debugLog('⚠ No objects found with the old color');
   }
 }
 
@@ -1866,7 +2844,7 @@ function getJerseyConfiguration() {
 function saveJerseyConfiguration() {
   const config = getJerseyConfiguration();
   localStorage.setItem('jerseyConfig', JSON.stringify(config));
-  console.log('Jersey configuration saved to localStorage:', config);
+  debugLog('Jersey configuration saved to localStorage:', config);
 }
 
 // ==================== SAVE FUNCTIONALITY - THUMBNAIL HANDLING (PLACEHOLDER) ====================
@@ -2051,7 +3029,8 @@ async function checkDesignNameExists(designName) {
       console.error('Supabase client not available');
       return false;
     }
-    const { data: { user } } = await supabase.auth.getUser();
+    // Use cached auth user to avoid repeated Supabase calls
+    const user = await (window.getCachedAuthUser ? window.getCachedAuthUser() : supabase.auth.getUser().then(({ data }) => data.user));
     if (!user) {
       return false;
     }
@@ -2081,8 +3060,9 @@ async function uploadThumbnailAndSaveDesign(designName) {
       throw new Error('Supabase client not available');
     }
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (!user || userError) {
+    // Use cached auth user to avoid repeated Supabase calls
+    const user = await (window.getCachedAuthUser ? window.getCachedAuthUser() : supabase.auth.getUser().then(({ data }) => data.user));
+    if (!user) {
       if (window.hideLoading) window.hideLoading();
       return {
         success: false,
@@ -2141,7 +3121,7 @@ async function uploadThumbnailAndSaveDesign(designName) {
 
     // Wait for the user_files entry to be created by the trigger (retry mechanism)
     let fileEntry = null;
-    console.log('Waiting for trigger to create user_files entry for:', userFolderPath);
+    debugLog('Waiting for trigger to create user_files entry for:', userFolderPath);
 
     // First, verify the file was uploaded to storage
     const { data: storageCheck, error: storageError } = await supabase.storage
@@ -2153,7 +3133,7 @@ async function uploadThumbnailAndSaveDesign(designName) {
     if (storageError) {
       console.error('Error checking storage:', storageError);
     } else {
-      console.log('Storage check result:', storageCheck);
+      debugLog('Storage check result:', storageCheck);
     }
 
     for (let i = 0; i < 10; i++) {
@@ -2173,11 +3153,11 @@ async function uploadThumbnailAndSaveDesign(designName) {
       if (error) {
         console.error(`Error fetching file entry (attempt ${i + 1}):`, error);
       } else if (data && data.length > 0) {
-        console.log('File entry found on attempt', i + 1, ':', data[0]);
+        debugLog('File entry found on attempt', i + 1, ':', data[0]);
         fileEntry = data[0];
         break;
       } else {
-        console.log(`File entry not found yet (attempt ${i + 1}/10)`);
+        debugLog(`File entry not found yet (attempt ${i + 1}/10)`);
       }
     }
 
@@ -2242,7 +3222,7 @@ async function uploadThumbnailAndSaveDesign(designName) {
 
           if (existingEntry) {
             fileEntry = existingEntry;
-            console.log('Found existing entry after conflict:', fileEntry);
+            debugLog('Found existing entry after conflict:', fileEntry);
           } else {
             if (window.hideLoading) window.hideLoading();
             throw new Error('Failed to create or find file entry: ' + insertError.message);
@@ -2253,7 +3233,7 @@ async function uploadThumbnailAndSaveDesign(designName) {
         }
       } else {
         fileEntry = manualEntry;
-        console.log('Manually created file entry:', fileEntry);
+        debugLog('Manually created file entry:', fileEntry);
       }
     }
 
@@ -2289,7 +3269,7 @@ async function uploadThumbnailAndSaveDesign(designName) {
     updateUIAfterSave(publicUrl);
 
     isInitialSave = false;
-    console.log('Design saved successfully');
+    debugLog('Design saved successfully');
     if (window.hideLoading) window.hideLoading();
     setDesignClean();
     return {
@@ -2314,7 +3294,8 @@ async function updateExistingDesign(designId, designName) {
       throw new Error('Supabase client not available');
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
+    // Use cached auth user to avoid repeated Supabase calls
+    const user = await (window.getCachedAuthUser ? window.getCachedAuthUser() : supabase.auth.getUser().then(({ data }) => data.user));
     if (!user) {
       return {
         success: false,
@@ -2376,7 +3357,7 @@ async function updateExistingDesign(designId, designName) {
 
     if (updateError) throw updateError;
 
-    console.log('Design updated successfully');
+    debugLog('Design updated successfully');
     setDesignClean();
     return {
       success: true,
@@ -2410,7 +3391,8 @@ async function saveDesign() {
       throw new Error('Supabase client not available');
     }
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    // Use cached auth user to avoid repeated Supabase calls
+    const user = await (window.getCachedAuthUser ? window.getCachedAuthUser() : supabase.auth.getUser().then(({ data }) => data.user));
 
     if (isSharedDesign || (!isInitialSave && currentDesignName && currentDesignId)) {
       // Check if the design has been ordered
@@ -2557,7 +3539,8 @@ if (mainSaveButton) {
     } else {
       const supabase = getSupabaseClient();
       if (supabase) {
-        const { data: { user } } = await supabase.auth.getUser();
+        // Use cached auth user to avoid repeated Supabase calls
+        const user = await (window.getCachedAuthUser ? window.getCachedAuthUser() : supabase.auth.getUser().then(({ data }) => data.user));
         isLoggedIn = user !== null;
       }
     }
@@ -2569,7 +3552,7 @@ if (mainSaveButton) {
         showDesignSaveModal();
       }
     } else {
-      console.log('User not logged in. Please log in to save your design.');
+      debugLog('User not logged in. Please log in to save your design.');
       if (window.showLoginModal) {
         window.showLoginModal();
       }
@@ -2586,7 +3569,8 @@ if (saveAsButton) {
     } else {
       const supabase = getSupabaseClient();
       if (supabase) {
-        const { data: { user } } = await supabase.auth.getUser();
+        // Use cached auth user to avoid repeated Supabase calls
+        const user = await (window.getCachedAuthUser ? window.getCachedAuthUser() : supabase.auth.getUser().then(({ data }) => data.user));
         isLoggedIn = user !== null;
       }
     }
@@ -2594,7 +3578,7 @@ if (saveAsButton) {
     if (isLoggedIn) {
       showDesignSaveModal();
     } else {
-      console.log('User not logged in. Please log in to save your design.');
+      debugLog('User not logged in. Please log in to save your design.');
       if (window.showLoginModal) {
         window.showLoginModal();
       }
@@ -2632,7 +3616,7 @@ if (newDesignButton) {
 function saveJerseyConfiguration() {
   const config = getJerseyConfiguration();
   localStorage.setItem('jerseyConfig', JSON.stringify(config));
-  console.log('Jersey configuration saved:', config);
+  debugLog('Jersey configuration saved:', config);
 }
 
 // Get current jersey configuration from UI
@@ -2760,13 +3744,28 @@ function hideConfigLoading() {
 function loadJerseyConfiguration(isSavedDesign) {
   const savedConfig = isSavedDesign ? localStorage.getItem('jerseyConfig') : null;
 
+  // When loading a saved design, mark it as clean (no unsaved changes)
+  // and set flag to prevent programmatic changes from marking it dirty
+  if (isSavedDesign) {
+    setDesignClean();
+    isLoadingConfig = true; // Prevent marking dirty during loading
+
+    // Store loading state in localStorage (persists across navigation)
+    // This helps handle timing issues with async operations
+    const loadingState = {
+      timestamp: Date.now(),
+      designId: currentDesignId || null
+    };
+    localStorage.setItem('jerseyDesignLoading', JSON.stringify(loadingState));
+  }
+
   if (savedConfig) {
     const config = JSON.parse(savedConfig);
 
     // Show loading overlay
     // showConfigLoading(); // Temporarily disabled
 
-    console.log('Loading jersey configuration:', config);
+    debugLog('Loading jersey configuration:', config);
 
     // Update URL parameters with collar and shoulder to ensure correct 3D model loads
     if (config.collar && config.shoulder) {
@@ -2847,82 +3846,128 @@ function loadJerseyConfiguration(isSavedDesign) {
       if (config.design.familyId && config.design.svgPath) {
         // With simplified config, just use the familyId directly
         currentFamily = config.design.familyId;
+
+        // Recalculate the SVG path to ensure correct depth for current page location
+        // Extract design ID from the saved path
+        const designId = getDesignIdFromSvgPath(config.design.svgPath);
+        if (designId && config.collar && config.shoulder) {
+          // Recalculate path with correct depth
+          currentDesign = getDesignSvgPath(config.design.familyId, designId, config.collar, config.shoulder);
+          debugLog(`📐 Recalculated SVG path: ${currentDesign} (was: ${config.design.svgPath})`);
+        } else {
+          // Fallback to saved path if we can't recalculate
           currentDesign = config.design.svgPath;
+          debugLog(`⚠️ Using saved SVG path: ${currentDesign}`);
+        }
 
-          // Load the family designs and show customization panel
-          setTimeout(() => {
+        // Load the family designs and show customization panel
+        setTimeout(() => {
           loadFamilyDesigns(config.design.familyId);
-            setTimeout(async () => {
-              // Update header to "Family - Design"
-              const restoredDesignId = getDesignIdFromSvgPath(config.design.svgPath);
-              if (restoredDesignId) {
-                familyName.textContent = `${toDisplayName(config.design.familyId)} - ${toDisplayName(restoredDesignId)}`;
-              }
+          setTimeout(async () => {
+            // Update header to "Family - Design"
+            const restoredDesignId = getDesignIdFromSvgPath(config.design.svgPath);
+            if (restoredDesignId) {
+              familyName.textContent = `${toDisplayName(config.design.familyId)} - ${toDisplayName(restoredDesignId)}`;
+            }
 
-              // Check if we have saved design colors
-              const hasSavedColors = config.design.designColors && config.design.designColors.length > 0;
+            // Check if we have saved design colors
+            const hasSavedColors = config.design.designColors && config.design.designColors.length > 0;
 
-              // Always fetch SVG to get class names
-              debugLog('🔍 Fetching SVG...');
-              try {
-                const response = await fetch(config.design.svgPath);
-                const svgText = await response.text();
-                const detectedColors = detectUniqueColors(svgText);
+            // Always fetch SVG to get class names (use recalculated path)
+            debugLog('🔍 Fetching SVG...');
+            try {
+              const response = await fetch(currentDesign);
+              const svgText = await response.text();
+              const detectedColors = await detectUniqueColorsWithOverride(svgText, currentDesign);
 
-                if (hasSavedColors) {
-                  // Use saved colors with detected class names
-                  debugLog('📦 Mapping saved colors to detected classes');
-                  window.currentSVGColors = detectedColors.map((item, index) => ({
-                    className: item.className,
-                    color: config.design.designColors[index] || item.color
-                  }));
-                  debugLog('✅ Mapped colors:', window.currentSVGColors);
-                } else {
-                  // Use detected colors
-                  debugLog('🔍 Using detected colors');
-                  window.currentSVGColors = detectedColors;
-                }
-                debugLog('✅ SVG processing complete, currentSVGColors set');
-              } catch (error) {
-                console.error('Error loading SVG:', error);
-                window.currentSVGColors = [];
-              }
-
-              debugLog('📋 About to call showDesignCustomization()');
-
-              // Set up event listener BEFORE calling showDesignCustomization
               if (hasSavedColors) {
-                debugLog('🔧 Setting up colorPickersReady listener');
-                const colorRestoreHandler = () => {
-                  // Wait for SVG to load before restoring colors
-                  setTimeout(() => {
-                    debugLog('🔄 Applying saved colors to SVG...');
-                    restoreDesignColors(config.design.designColors);
-                  }, 1000); // Wait for SVG to load into hidden container (1s for slower machines)
-                  window.removeEventListener('colorPickersReady', colorRestoreHandler);
-                };
-                window.addEventListener('colorPickersReady', colorRestoreHandler);
+                // Use saved colors with detected class names
+                debugLog('📦 Mapping saved colors to detected classes');
+                window.currentSVGColors = detectedColors.map((item, index) => ({
+                  ...item,  // Preserve all flags (shouldSkip, isGradient, isMerged, etc.)
+                  color: config.design.designColors[index] || item.color
+                }));
+                debugLog('✅ Mapped colors:', window.currentSVGColors);
+              } else {
+                // Use detected colors
+                debugLog('🔍 Using detected colors');
+                window.currentSVGColors = detectedColors;
               }
+              debugLog('✅ SVG processing complete, currentSVGColors set');
+            } catch (error) {
+              console.error('Error loading SVG:', error);
+              window.currentSVGColors = [];
+            }
 
-              showDesignCustomization();
-              debugLog('✅ showDesignCustomization() completed');
+            debugLog('📋 About to call showDesignCustomization()');
 
-              // Dispatch the designSelected event to load the SVG on the 3D model
-              const designSelectedEvent = new CustomEvent('designSelected', {
-                detail: { svgPath: config.design.svgPath }
-              });
-              window.dispatchEvent(designSelectedEvent);
-
-              // Load the 3D configuration (for logos and other settings)
+            // Set up event listener BEFORE calling showDesignCustomization
+            if (hasSavedColors) {
+              debugLog('🔧 Setting up colorPickersReady listener');
+              const colorRestoreHandler = async () => {
+                // Wait for SVG to load before restoring colors
+                setTimeout(async () => {
+                  debugLog('🔄 Applying saved colors to SVG...');
+                  await restoreDesignColors(config.design.designColors);
+                  // After colors are restored, mark clean and re-enable dirty tracking
+                  // This happens after restoreDesignColors completes (which sets color picker values)
+                  if (isSavedDesign) {
+                    setDesignClean();
+                    isLoadingConfig = false; // Re-enable dirty tracking after color restoration
+                    // Remove loading state from localStorage after a delay
+                    // This gives time for any delayed events to complete
+                    setTimeout(() => {
+                      localStorage.removeItem('jerseyDesignLoading');
+                    }, 2000);
+                  }
+                }, 1000); // Wait for SVG to load into hidden container (1s for slower machines)
+                window.removeEventListener('colorPickersReady', colorRestoreHandler);
+              };
+              window.addEventListener('colorPickersReady', colorRestoreHandler);
+            } else {
+              // If no saved colors, we can reset the flag earlier
+              // But still wait a bit to ensure all operations complete
               setTimeout(() => {
-                loadJustThe3DConfig(config);
-                // Hide canvas loader after all async operations complete
-                setTimeout(() => {
-                  if (window.hideCanvasLoader) window.hideCanvasLoader();
-                }, 800);
-              }, 200);
-            }, 100);
+                if (isSavedDesign) {
+                  setDesignClean();
+                  isLoadingConfig = false;
+                  // Remove loading state from localStorage after a delay
+                  // This gives time for any delayed events to complete
+                  setTimeout(() => {
+                    localStorage.removeItem('jerseyDesignLoading');
+                  }, 2000);
+                }
+              }, 500);
+            }
+
+            showDesignCustomization();
+            debugLog('✅ showDesignCustomization() completed');
+
+            // Dispatch the designSelected event to load the SVG on the 3D model (use recalculated path)
+            const designSelectedEvent = new CustomEvent('designSelected', {
+              detail: { svgPath: currentDesign }
+            });
+            window.dispatchEvent(designSelectedEvent);
+
+            // Load the 3D configuration (for logos and other settings)
+            setTimeout(() => {
+              loadJustThe3DConfig(config);
+              // Hide canvas loader after all async operations complete
+              setTimeout(() => {
+                if (window.hideCanvasLoader) window.hideCanvasLoader();
+                // Only mark clean here if we don't have saved colors (otherwise it's handled in colorRestoreHandler)
+                if (isSavedDesign && !hasSavedColors) {
+                  setDesignClean();
+                  isLoadingConfig = false; // Re-enable dirty tracking after loading
+                  // Remove loading state from localStorage after a delay
+                  setTimeout(() => {
+                    localStorage.removeItem('jerseyDesignLoading');
+                  }, 2000);
+                }
+              }, 800);
+            }, 200);
           }, 100);
+        }, 100);
       }
     } else if (config.activeTab === 'colors') {
       // Load colors & stripes mode configuration
@@ -3062,6 +4107,17 @@ function loadJerseyConfiguration(isSavedDesign) {
         // Hide canvas loader after all async operations complete
         setTimeout(() => {
           if (window.hideCanvasLoader) window.hideCanvasLoader();
+          // Mark design as clean after all loading operations complete
+          // This ensures that programmatic changes during load don't mark it as dirty
+          if (isSavedDesign) {
+            setDesignClean();
+            isLoadingConfig = false; // Re-enable dirty tracking after loading
+            // Remove loading state from localStorage after a delay
+            // This gives time for any delayed events (like color restoration) to complete
+            setTimeout(() => {
+              localStorage.removeItem('jerseyDesignLoading');
+            }, 2000);
+          }
         }, 800);
       }, 200);
     }
@@ -3072,6 +4128,14 @@ function loadJerseyConfiguration(isSavedDesign) {
     // Hide canvas loader after model loads (no design to load)
     setTimeout(() => {
       if (window.hideCanvasLoader) window.hideCanvasLoader();
+      // Reset loading flag if it was set
+      if (isSavedDesign) {
+        isLoadingConfig = false;
+        // Remove loading state from localStorage
+        setTimeout(() => {
+          localStorage.removeItem('jerseyDesignLoading');
+        }, 2000);
+      }
     }, 1000);
   }
 }
@@ -3117,7 +4181,7 @@ async function detectSharedDesign() {
         if (error) throw error;
 
         if (data && data.design_metadata) {
-          console.log('Shared design loaded:', data.design_metadata);
+          debugLog('Shared design loaded:', data.design_metadata);
 
           // Update panel title
           const titleElement = document.querySelector('.panel-title');
@@ -3130,7 +4194,8 @@ async function detectSharedDesign() {
 
           // Set state variables for save functionality
           // Check if the current user owns this design
-          const { data: { user } } = await supabase.auth.getUser();
+          // Use cached auth user to avoid repeated Supabase calls
+          const user = await (window.getCachedAuthUser ? window.getCachedAuthUser() : supabase.auth.getUser().then(({ data }) => data.user));
           if (user) {
             // Check ownership
             const { data: ownerData } = await supabase
@@ -3138,26 +4203,26 @@ async function detectSharedDesign() {
               .select('owner')
               .eq('short_code', shortCode)
               .single();
-            
+
             if (ownerData && ownerData.owner === user.id) {
               // User owns this design - enable direct save/overwrite
               currentDesignId = data.id;
               currentDesignName = data.custom_name || data.design_name;
               isInitialSave = false;
               isSharedDesign = false;
-              console.log('User owns this design, save will overwrite. ID:', currentDesignId);
+              debugLog('User owns this design, save will overwrite. ID:', currentDesignId);
             } else {
               // User doesn't own this design - treat as shared
               isSharedDesign = true;
               isInitialSave = true;
-              console.log('Viewing shared design from another user');
+              debugLog('Viewing shared design from another user');
             }
           }
 
           // Load the configuration
           loadJerseyConfiguration(true);
         } else {
-          console.log('No design found with the provided short code');
+          debugLog('No design found with the provided short code');
           loadJerseyConfiguration(false);
         }
       } else {
@@ -3189,6 +4254,21 @@ async function detectSharedDesign() {
 
 // Initialize configuration loading on page load
 document.addEventListener('DOMContentLoaded', () => {
+  // Clean up any stale loading flags from previous sessions
+  // (flags older than 30 seconds are considered stale)
+  const loadingState = localStorage.getItem('jerseyDesignLoading');
+  if (loadingState) {
+    try {
+      const { timestamp } = JSON.parse(loadingState);
+      const now = Date.now();
+      if (now - timestamp > 30000) {
+        localStorage.removeItem('jerseyDesignLoading');
+      }
+    } catch (e) {
+      localStorage.removeItem('jerseyDesignLoading');
+    }
+  }
+
   // Detect and load shared designs
   setTimeout(() => {
     detectSharedDesign();
@@ -3199,7 +4279,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (homeButton) {
     homeButton.addEventListener('click', () => {
       localStorage.removeItem('jerseyConfig');
-      console.log('Cleared saved config on home button click');
+      localStorage.removeItem('jerseyDesignLoading');
+      debugLog('Cleared saved config on home button click');
     });
   }
 });

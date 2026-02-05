@@ -4,8 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title data-en="3D Jersey Configurator - Admin Design" data-fr="Configurateur de Maillot 3D - Design Admin">3D
-        Jersey Configurator - Admin Design</title>
+    <title data-en="3D Jersey Configurator" data-fr="Configurateur de Maillot 3D">3D
+        Jersey Configurator</title>
 
     <!-- Preload Lottie player for faster loading animation -->
     <link rel="modulepreload" href="https://unpkg.com/@lottiefiles/dotlottie-wc@latest/dist/dotlottie-wc.js">
@@ -27,6 +27,9 @@
     <!-- Fabric.js for SVG texture manipulation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
 
+    <!-- JSZip for creating zip files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
     <!-- lil-gui for debug controls -->
     <script src="https://cdn.jsdelivr.net/npm/lil-gui@0.19.2/dist/lil-gui.umd.min.js"></script>
 </head>
@@ -37,12 +40,12 @@
             <div class="brand">
                 <img class="brand-logo" src="../../images/jersey_logo.svg" alt="Jersey logo">
                 <span class="brand-name">
-                    <span data-en>3D Jersey Configurator - Admin Design</span>
-                    <span data-fr>Configurateur de Maillot 3D - Design Admin</span>
+                    <span data-en>3D Jersey Configurator</span>
+                    <span data-fr>Configurateur de Maillot 3D</span>
                 </span>
             </div>
             <div class="header-controls">
-                <a href="../../admin/" class="nav-link active">Admin</a>
+                <!-- <a href="../../admin/" class="nav-link active">Admin</a>
                 <a href="../../index.html" class="home-button" aria-label="Home">
                     <svg width="25" height="25" viewBox="-4.5 0 32 32" fill="currentColor"
                         xmlns="http://www.w3.org/2000/svg">
@@ -55,14 +58,14 @@
                     <span data-en>Configurator</span>
                     <span data-fr>Configurateur</span>
                 </a>
-                <a href=my-designs/index.html?from=jersey" class="nav-link" style="display: none;">
+                <a href="../../my-designs/index.html?from=jersey" class="nav-link" style="display: none;">
                     <span data-en>My Designs</span>
                     <span data-fr>Mes Designs</span>
                 </a>
-                <a href="place-order/index.html?from=jersey" class="nav-link" style="display: none;">
+                <a href="../../place-order/index.html?from=jersey" class="nav-link" style="display: none;">
                     <span data-en>Place Order</span>
                     <span data-fr>Passer Commande</span>
-                </a>
+                </a> -->
                 <div class="language-toggle">
                     <span class="language-label">EN</span>
                     <button class="toggle-switch" aria-label="Switch language" aria-pressed="false">
@@ -149,8 +152,8 @@
                         <span data-en>Select Design Family</span>
                         <span data-fr>Sélectionner la Famille de Design</span>
                     </h2>
-                    <button class="back-button-icon" id="back-button" style="display: none;">
-                        <img src="../images/back_icon.svg" alt="Back">
+                    <button id="back-button" class="back-button-icon" style="display: none;">
+                        <img src="../../images/back_icon.svg" alt="Back">
                     </button>
                 </div>
 
@@ -910,6 +913,7 @@
     <script src="../../script.js"></script>
     <script src="../script.js"></script>
     <script type="module" src="../threeD-script.js"></script>
+
 
     <!-- Fabric.js canvases for texture generation (one per jersey part) -->
     <!-- In debug mode, the active canvas will be visible in the bottom-right corner -->

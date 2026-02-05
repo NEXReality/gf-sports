@@ -1,0 +1,214 @@
+{
+  "graphic": {
+    "concrete": [
+      { "className": "__default_black__", "color": "#000000" },
+      { "className": "st3", "color": "#91c5ea" },
+      { "className": "st4", "color": "#6850a0" },
+      { "className": "st8", "color": "#ecc615" }
+    ],
+    "elite": [],
+    "fury": [],
+    "ignite": [
+      { "className": "__default_black__", "color": "#000000" },
+      { "className": "st11", "color": "#ffffff" },
+      { "className": "st12", "color": "#9ad7ec" },
+      { "className": "st14", "color": "#1c3a61" },
+      { "className": "st19", "color": "#ecc615" },
+      { "className": "st4__stroke", "color": "#1c3a61" },
+      { "className": "st5__stroke", "color": "#373435" },
+      { "className": "st7__stroke", "color": "#41abcf" }
+    ],
+    "kickoff": [],
+    "monarch": [
+      { "className": "__default_black__", "color": "#000000" },
+      { "className": "st12", "color": "#ecc615" },
+      { "className": "st2", "color": "#ffffff" },
+      { "className": "st3", "color": "#0a0a0b" },
+      { "className": "st5__stroke", "color": "#000000" },
+      { "className": "st9", "color": "#0091cc" }
+    ],
+    "pulse": [
+      { "className": "__default_black__", "color": "#000000" },
+      { "className": "st0", "color": "#353636" },
+      { "className": "st1", "color": "#0f4732" },
+      { "className": "st10", "color": "#79e3bd" },
+      { "className": "st11", "color": "#ecc615" },
+      { "className": "st14", "color": "#be853b" },
+      { "className": "st2", "color": "#ffffff" },
+      { "className": "st4__stroke", "color": "#79e3bd" },
+      { "className": "st7", "color": "#16b074" },
+      { "className": "st8", "color": "#80c692" },
+      { "className": "st9", "color": "#78cfae" }
+    ],
+    "rush": [
+      { "className": "st41", "color": "#9ad7ec" },
+      { "className": "st71", "color": "#ecc615" }
+    ],
+    "vortex": [
+      { "className": "st1", "color": "#c22929" },
+      { "className": "st2", "color": "#9ad7ec" },
+      { "className": "st4", "color": "#404040" },
+      { "className": "st7", "color": "#ecc615" }
+    ]
+  },
+  "jacquard": {
+    "classic": [
+      { "className": "__default_black__", "color": "#000000" },
+      { "className": "st0", "color": "#ccb610" },
+      { "className": "st2", "color": "#edd51c" }
+    ],
+    "crest": [
+      { "className": "st2", "color": "#e25007" },
+      { "className": "st3", "color": "#ecc615" },
+      { "className": "st5", "color": "#ff5e00" }
+    ],
+    "echo": [
+      { "className": "__default_black__", "color": "#000000", "isGradient": true, "isMerged": true },
+      { "className": "st11", "color": "#124ba6" },
+      { "className": "st12", "color": "#ecc615" },
+      { "className": "st15", "color": "#072659" },
+      { "className": "st17", "color": "#0e459e" },
+      { "className": "st2", "color": "#ffffff", "isGradient": true, "isMerged": true }
+    ],
+    "prime": [
+      { "className": "__default_black__", "color": "#000000" },
+      { "className": "st1", "color": "#6e3370" },
+      { "className": "st2", "color": "#ffffff" },
+      { "className": "st4", "color": "#dd2679" },
+      { "className": "st8", "color": "#da5195" },
+      { "className": "st9", "color": "#ecc615" }
+    ]
+  },
+  "stripes": {
+    "captain": [
+      { "className": "__default_black__", "color": "#000000" },
+      { "className": "st0", "color": "#f2947a" },
+      { "className": "st1", "color": "#ffffff" },
+      { "className": "st11", "color": "#f1cc46" },
+      { "className": "st12", "color": "#ecc615" },
+      { "className": "st5__stroke", "color": "#eb7757" }
+    ],
+    "derby": [
+      { "className": "__default_black__", "color": "#000000" },
+      { "className": "st0", "color": "#ffcc00" },
+      { "className": "st10", "color": "#80c692" },
+      { "className": "st15", "color": "#ecc615" },
+      { "className": "st6__stroke", "color": "#ffffff" },
+      { "className": "st7__stroke", "color": "#80c692" },
+      { "className": "st8", "color": "#ffffff" }
+    ],
+    "flux": [
+      { "className": "__default_black__", "color": "#000000" },
+      { "className": "st0", "color": "#ffffff" },
+      { "className": "st10__stroke", "color": "#cccccc" },
+      { "className": "st13", "color": "#cccccc" },
+      { "className": "st14", "color": "#ecc615" },
+      { "className": "st18", "color": "#e6e6e6" },
+      { "className": "st4__stroke", "color": "#000000" },
+      { "className": "st7__stroke", "color": "#373435" },
+      { "className": "st9__stroke", "color": "#f7941d" }
+    ],
+    "milano": [
+      { "className": "__default_black__", "color": "#000000" },
+      { "className": "st0", "color": "#ffcc00" },
+      { "className": "st2", "color": "#ffffff" },
+      { "className": "st3", "color": "#0043ff" },
+      { "className": "st7__stroke", "color": "#ffcc00" }
+    ],
+    "onyx": [
+      { "className": "st3", "color": "#2698d1" },
+      { "className": "st13", "color": "#ffff00" },
+      { "className": "st8", "color": "#ffd700" },
+      { "className": "st9", "color": "#ffd700" }
+    ],
+    "prism": [
+      { "className": "__default_black__", "color": "#000000" },
+      { "className": "st15", "color": "#ffffff" },
+      { "className": "st20__stroke", "color": "#000000" },
+      { "className": "st5", "color": "#d65a60" },
+      { "className": "st6", "color": "#ffbfc4" },
+      { "className": "st7", "color": "#fa8e97" }
+    ],
+    "royal": [
+      { "className": "__default_black__", "color": "#000000" },
+      { "className": "st0", "color": "#ffffff" },
+      { "className": "st1", "color": "#1a5f5c" },
+      { "className": "st5", "color": "#ecc615" },
+      { "className": "st7", "color": "#0d3d3b" }
+    ],
+    "signature": [
+      { "className": "__default_black__", "color": "#000000" },
+      { "className": "st29", "color": "#ffffff" },
+      { "className": "st38__stroke", "color": "#203f7d" },
+      { "className": "st61", "color": "#203f7d" },
+      { "className": "st73", "color": "#ecc615" }
+    ]
+  },
+  "uni_design": {
+    "asphalt": [
+      { "className": "st1", "color": "#182146" },
+      { "className": "st2", "color": "#c22929" },
+      { "className": "st3", "color": "#ffffff" },
+      { "className": "st4", "color": "#f69fd0" },
+      { "className": "st5", "color": "#9ad7ec" },
+      { "className": "st7", "color": "#404040" },
+      { "className": "st9", "color": "#ecc615" }
+    ],
+    "blaze": [
+      { "className": "st0", "color": "#ffffff" },
+      { "className": "st3", "color": "#ffaa00" },
+      { "className": "st4", "color": "#0033a1" },
+      { "className": "st5", "color": "#ecc615" }
+    ],
+    "glitch": [
+      { "className": "st0", "color": "#ffffff" },
+      { "className": "st1", "color": "#ffd103" },
+      { "className": "st2", "color": "#ee3224" },
+      { "className": "st4", "color": "#ecc615" }
+    ],
+    "ironclad": [
+      { "className": "__default_black__", "color": "#000000" },
+      { "className": "st0", "color": "#ffffff" },
+      { "className": "st2__stroke", "color": "#ba9765" },
+      { "className": "st4", "color": "#ba9765" },
+      { "className": "st5", "color": "#002d62" },
+      { "className": "st6", "color": "#ecc615" },
+      { "className": "st8", "color": "#97caeb" }
+    ],
+    "raptor": [
+      { "className": "__default_black__", "color": "#000000" },
+      { "className": "st1", "color": "#053d7d" },
+      { "className": "st10", "color": "#f6eb8d" },
+      { "className": "st11", "color": "#ffffff" },
+      { "className": "st13", "color": "#eb1d67" },
+      { "className": "st15", "color": "#ecc615" },
+      { "className": "st5__stroke", "color": "#053d7d" },
+      { "className": "st6__stroke", "color": "#000000" }
+    ],
+    "revolt": [
+      { "className": "__default_black__", "color": "#000000" },
+      { "className": "st11", "color": "#214440" },
+      { "className": "st5__stroke", "color": "#ffaa00" },
+      { "className": "st8", "color": "#ffaa00" },
+      { "className": "st9", "color": "#ecc615" }
+    ],
+    "savage": [
+      { "className": "__default_black__", "color": "#000000" },
+      { "className": "st0", "color": "#034236" },
+      { "className": "st1", "color": "#ffffff" },
+      { "className": "st5", "color": "#0d705d" },
+      { "className": "st6", "color": "#f0f2f1" },
+      { "className": "st7", "color": "#ecc615" },
+      { "className": "st8", "color": "#fd6e44" },
+      { "className": "st9", "color": "#144235" }
+    ],
+    "velocity": [
+      { "className": "__default_black__", "color": "#000000" },
+      { "className": "st0", "color": "#ffffff" },
+      { "className": "st3", "color": "#7394b5" },
+      { "className": "st4", "color": "#253d55" },
+      { "className": "st6", "color": "#2d486a" },
+      { "className": "st8", "color": "#084df0" }
+    ]
+  }
+}

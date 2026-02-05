@@ -58,21 +58,38 @@ function getURLParameters() {
     };
 }
 
+
+// Helper function to calculate the correct base path based on current page depth
+// This ensures resources load correctly from both /jersey-configurator/ and /jersey-configurator/admin-design/
+function getBasePath() {
+    const path = window.location.pathname;
+    // Count how many directories deep we are from jersey-configurator/
+    // e.g., /jersey-configurator/index.html -> 0 levels deep -> '../'
+    // e.g., /jersey-configurator/admin-design/index.html -> 1 level deep -> '../../'
+    const depth = (path.match(/\/jersey-configurator\/([^/]+\/)/g) || []).length;
+    return depth === 0 ? '../' : '../../';
+}
+
 // Helper function to get model path based on selections
 function getModelPath(collar, shoulder) {
     const key = `${collar}_${shoulder}`;
     const filename = MODEL_MAP[key];
+    const basePath = getBasePath();
 
     if (!filename) {
         console.warn(`No model found for ${collar} + ${shoulder}, using default`);
-        return '../jersey_3d_models/insert_collar_reglan_01.glb';
+        return `${basePath}jersey_3d_models/insert_collar_reglan_01.glb`;
     }
 
-    return `../jersey_3d_models/${filename}`;
+    return `${basePath}jersey_3d_models/${filename}`;
 }
+
 
 // Make getModelPath available globally for use in script.js
 window.getModelPath = getModelPath;
+
+// Make getBasePath available globally for use in script.js
+window.getBasePath = getBasePath;
 
 class JerseyViewer {
     constructor(containerId) {
@@ -97,6 +114,9 @@ class JerseyViewer {
         this.partCanvases = {};
         this.partTextures = {};
         this.excludedMaterials = ['stitches_sleeves', 'cover_stitches', 'stitches_main'];
+
+        // Detect if this is a shared page (read-only view)
+        this.isSharedPage = window.location.pathname.includes('/share/');
 
         // Track active mode: 'colors' (stripes) or 'design' (SVG design)
         this.activeMode = 'colors'; // Default to colors & stripes mode
@@ -257,10 +277,15 @@ class JerseyViewer {
         this.setupLogoInteraction();
 
         // Load custom control icons
+        // Determine correct path based on current page location
+        const currentPath = window.location.pathname;
+        const isInSubfolder = currentPath.includes('/admin-design/') || currentPath.includes('/share/');
+        const iconBasePath = isInSubfolder ? '../../images/' : '../images/';
+
         this.deleteIcon = new Image();
-        this.deleteIcon.src = '../images/delete.svg';
+        this.deleteIcon.src = iconBasePath + 'delete.svg';
         this.copyIcon = new Image();
-        this.copyIcon.src = '../images/copy.svg';
+        this.copyIcon.src = iconBasePath + 'copy.svg';
     }
 
     /**
@@ -708,6 +733,9 @@ class JerseyViewer {
 
     // Handle mouse down for logo dragging
     onLogoMouseDown(event) {
+        // Disable logo interaction on shared pages
+        if (this.isSharedPage) return;
+
         // Calculate mouse position in normalized device coordinates (-1 to +1)
         const rect = this.renderer.domElement.getBoundingClientRect();
         this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -884,24 +912,15 @@ class JerseyViewer {
         } else {
             // No intersection with 3D model - deselect all logos to allow OrbitControls
             debugLog(`🔄 Clicked outside 3D model - deselecting logos`);
-
-            // Deselect active objects on all canvases and update textures
-            Object.entries(this.partCanvases).forEach(([partName, canvas]) => {
-                canvas.discardActiveObject();
-                canvas.renderAll();
-                // Update texture to remove selection borders from 3D model
-                this.updateTexture(partName);
-            });
-
-            // Re-enable orbit controls
-            if (this.controls) {
-                this.controls.enabled = true;
-            }
+            this.clearAllLogoSelections();
         }
     }
 
     // Handle mouse move for logo dragging
     onLogoMouseMove(event) {
+        // Disable logo interaction on shared pages
+        if (this.isSharedPage) return;
+
         if (!this.isDragging || !this.draggedPart) return;
 
         // Calculate mouse position
@@ -946,6 +965,27 @@ class JerseyViewer {
 
             this.isDragging = false;
             this.draggedPart = null;
+        }
+    }
+
+    /**
+     * Clear all logo selections across all canvases
+     * Used when clicking outside the 3D model or switching parts
+     */
+    clearAllLogoSelections() {
+        debugLog(`🔄 Clearing all logo selections`);
+
+        // Deselect active objects on all canvases and update textures
+        Object.entries(this.partCanvases).forEach(([partName, canvas]) => {
+            canvas.discardActiveObject();
+            canvas.renderAll();
+            // Update texture to remove selection borders from 3D model
+            this.updateTexture(partName);
+        });
+
+        // Re-enable orbit controls
+        if (this.controls) {
+            this.controls.enabled = true;
         }
     }
 
@@ -1323,9 +1363,10 @@ class JerseyViewer {
     // Rasterize current SVG and load to all Fabric canvases
     rasterizeAndLoadSVG() {
         if (!this.currentSVGElement) {
-            console.warn('No SVG element to rasterize');
+            console.warn('[DEBUG] No SVG element to rasterize');
             return;
         }
+        debugLog('[DEBUG] rasterizeAndLoadSVG called with SVG element', this.currentSVGElement);
 
         const startTime = performance.now();
 
@@ -1339,6 +1380,7 @@ class JerseyViewer {
         img.crossOrigin = 'anonymous';
 
         img.onload = () => {
+            debugLog('[DEBUG] SVG rasterization started via img.onload');
             debugLog('SVG rasterizing...');
 
             // Rasterize to canvas
@@ -2088,6 +2130,17 @@ class JerseyViewer {
 
             // Add logo to canvas as a new layer
             fabricCanvas.add(img);
+
+            // Clear active selections on ALL other canvases to remove blue borders
+            // This ensures that when uploading to a different part, the old logo is fully deselected
+            Object.entries(this.partCanvases).forEach(([partName, canvas]) => {
+                if (canvas !== fabricCanvas) {
+                    canvas.discardActiveObject();
+                    canvas.renderAll(); // Force re-render to clear visual borders
+                }
+            });
+
+            // Set the newly uploaded logo as active
             fabricCanvas.setActiveObject(img);
 
             // Store reference to the logo for UI controls
@@ -2258,8 +2311,8 @@ class JerseyViewer {
         ctx.save();
         ctx.translate(left, top);
 
-        // Draw the delete icon image if loaded
-        if (this.deleteIcon && this.deleteIcon.complete) {
+        // Draw the delete icon image if loaded and valid
+        if (this.deleteIcon && this.deleteIcon.complete && this.deleteIcon.naturalWidth > 0) {
             ctx.drawImage(this.deleteIcon, -size / 2, -size / 2, size, size);
         } else {
             // Fallback: Draw red circle with white X if image not loaded
@@ -2289,8 +2342,8 @@ class JerseyViewer {
         ctx.save();
         ctx.translate(left, top);
 
-        // Draw the copy icon image if loaded
-        if (this.copyIcon && this.copyIcon.complete) {
+        // Draw the copy icon image if loaded and valid
+        if (this.copyIcon && this.copyIcon.complete && this.copyIcon.naturalWidth > 0) {
             ctx.drawImage(this.copyIcon, -size / 2, -size / 2, size, size);
         } else {
             // Fallback: Draw green circle with white + if image not loaded
@@ -2559,8 +2612,20 @@ class JerseyViewer {
         if (config.activeTab === 'designs' && config.design) {
             // Load design mode configuration
             if (config.design.svgPath) {
-                debugLog(`Loading SVG design: ${config.design.svgPath}`);
-                this.loadSVGDesign(config.design.svgPath);
+                // Recalculate SVG path to ensure correct depth for current page location
+                let svgPath = config.design.svgPath;
+
+                // Try to recalculate path if we have the necessary info
+                if (config.design.familyId && config.collar && config.shoulder) {
+                    const designId = window.getDesignIdFromSvgPath ? window.getDesignIdFromSvgPath(config.design.svgPath) : null;
+                    if (designId && window.getDesignSvgPath) {
+                        svgPath = window.getDesignSvgPath(config.design.familyId, designId, config.collar, config.shoulder);
+                        debugLog(`📐 Recalculated SVG path in loadInitialConfig: ${svgPath} (was: ${config.design.svgPath})`);
+                    }
+                }
+
+                debugLog(`Loading SVG design: ${svgPath}`);
+                this.loadSVGDesign(svgPath);
                 willLoadSVG = true;
             }
 
@@ -2569,23 +2634,39 @@ class JerseyViewer {
         } else if (config.activeTab === 'colors') {
             // Load colors & stripes mode configuration
             if (config.colorsAndStripes) {
-                // Apply part colors to the 3D model
+                // Apply part colors and stripe configurations to the 3D model
                 Object.entries(config.colorsAndStripes).forEach(([partName, partConfig]) => {
-                    if (partConfig.color) {
-                        debugLog(`Applying color ${partConfig.color} to part: ${partName}`);
-                        // Apply color to the Fabric canvas for this part
-                        const fabricCanvas = this.partCanvases[partName];
-                        if (fabricCanvas) {
-                            fabricCanvas.backgroundColor = partConfig.color;
-                            fabricCanvas.renderAll();
-                            this.updateTexture(partName);
-                        }
+                    const fabricCanvas = this.partCanvases[partName];
+
+                    // Apply background color
+                    if (partConfig.backgroundColor && fabricCanvas) {
+                        debugLog(`Applying background color ${partConfig.backgroundColor} to part: ${partName}`);
+                        fabricCanvas.backgroundColor = partConfig.backgroundColor;
+                        fabricCanvas.renderAll();
+                    }
+
+                    // Apply stripe orientation
+                    if (partConfig.stripeOrientation) {
+                        debugLog(`Setting stripe orientation for ${partName}: ${partConfig.stripeOrientation}`);
+                        this.stripeOrientationByPart[partName] = partConfig.stripeOrientation;
+                    }
+
+                    // Apply stripe layer configurations
+                    if (partConfig.stripes) {
+                        debugLog(`Loading stripe configurations for ${partName}:`, partConfig.stripes);
+                        this.stripeLayersByPart[partName] = partConfig.stripes;
+
+                        // Regenerate stripes for this part to apply the configuration
+                        debugLog(`Regenerating stripes for ${partName}`);
+                        this.regenerateStripesForPart(partName);
+                    } else if (fabricCanvas) {
+                        // No stripes configured, just update the texture with background color
+                        this.updateTexture(partName);
                     }
                 });
-            }
 
-            // Stripe configurations will be handled by the UI
-            // The 3D model will reflect changes as the user interacts with controls
+                debugLog('✅ Colors and stripes configuration loaded and applied');
+            }
         }
 
         // Load logos if present
@@ -3058,7 +3139,8 @@ class JerseyViewer {
         // Load ribbed collar normal map texture if not already loaded
         if (enabled && !this.ribbedCollarNormalMap) {
             const textureLoader = new THREE.TextureLoader();
-            this.ribbedCollarNormalMap = textureLoader.load('../images/collar_nm.jpg',
+            const basePath = getBasePath();
+            this.ribbedCollarNormalMap = textureLoader.load(`${basePath}images/collar_nm.jpg`,
                 (texture) => {
                     debugLog('✓ Ribbed collar normal map loaded successfully');
                     texture.wrapS = THREE.RepeatWrapping;
@@ -3177,15 +3259,22 @@ class JerseyViewer {
         const originalAspect = this.camera.aspect;
         const originalBackground = this.scene.background;
         const originalGroundPlaneVisible = this.groundPlane ? this.groundPlane.visible : false;
-        const originalWidth = this.renderer.domElement.width;
-        const originalHeight = this.renderer.domElement.height;
+
+        // Use getSize() to get actual display size (not canvas buffer size with devicePixelRatio)
+        const originalSize = new THREE.Vector2();
+        this.renderer.getSize(originalSize);
+
+        // Save original clear color and alpha (design-viewer approach)
+        const originalClearColor = this.renderer.getClearColor(new THREE.Color());
+        const originalClearAlpha = this.renderer.getClearAlpha();
 
         // Hide ground plane for transparent background
         if (this.groundPlane) {
             this.groundPlane.visible = false;
         }
 
-        // Set transparent background
+        // Set transparent background (design-viewer approach)
+        this.renderer.setClearColor(originalClearColor, 0); // alpha 0 for transparency
         this.scene.background = null;
 
         // Use exact "Front" view camera position from CAMERA_POSITION_FOR_PART
@@ -3217,7 +3306,8 @@ class JerseyViewer {
         const ctx = offscreenCanvas.getContext('2d');
 
         // Draw the rendered image
-        ctx.drawImage(canvas, 0, 0);
+        // IMPORTANT: canvas.width/height accounts for devicePixelRatio, so we draw from full canvas
+        ctx.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, width, height);
 
         // Restore original states
         this.camera.position.copy(originalPosition);
@@ -3229,9 +3319,12 @@ class JerseyViewer {
             this.groundPlane.visible = originalGroundPlaneVisible;
         }
 
+        // Restore original clear color and alpha (design-viewer approach)
+        this.renderer.setClearColor(originalClearColor, originalClearAlpha);
+
         // Restore original renderer size
-        this.renderer.setSize(originalWidth, originalHeight);
-        this.camera.aspect = originalWidth / originalHeight;
+        this.renderer.setSize(originalSize.x, originalSize.y);
+        this.camera.aspect = originalSize.x / originalSize.y;
         this.camera.updateProjectionMatrix();
 
         // Re-render with original settings
@@ -3242,6 +3335,145 @@ class JerseyViewer {
             offscreenCanvas.toBlob(resolve, 'image/webp', 0.9);
         });
     }
+
+    /**
+     * Take a screenshot of the current view and download it as PNG
+     * This captures the exact current camera position and viewport
+     */
+    takeCurrentViewScreenshot() {
+        if (!this.renderer || !this.camera || !this.scene) {
+            console.error('3D viewer not fully initialized');
+            return;
+        }
+
+        // Store original render settings
+        const originalRenderTarget = this.renderer.getRenderTarget();
+        const originalAspect = this.camera.aspect;
+        const originalToneMapping = this.renderer.toneMapping;
+        const originalExposure = this.renderer.toneMappingExposure;
+        const originalOutputEncoding = this.renderer.outputEncoding;
+
+        // Save original clear color and alpha for transparent background (design-viewer approach)
+        const originalClearColor = this.renderer.getClearColor(new THREE.Color());
+        const originalClearAlpha = this.renderer.getClearAlpha();
+        const originalBackground = this.scene.background;
+        const originalGroundPlaneVisible = this.groundPlane ? this.groundPlane.visible : false;
+
+        // Hide ground plane and set transparent background
+        if (this.groundPlane) {
+            this.groundPlane.visible = false;
+        }
+        this.renderer.setClearColor(originalClearColor, 0); // alpha 0 for transparency
+        this.scene.background = null;
+
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const aspectRatio = viewportWidth / viewportHeight;
+
+        let newWidth, newHeight;
+        if (aspectRatio > 16 / 9) {
+            newWidth = 3200;
+            newHeight = Math.round(3200 / aspectRatio);
+        } else {
+            newHeight = 1800;
+            newWidth = Math.round(1800 * aspectRatio);
+        }
+
+        // Adjust camera aspect ratio
+        this.camera.aspect = newWidth / newHeight;
+        this.camera.updateProjectionMatrix();
+
+        const renderTarget = new THREE.WebGLRenderTarget(newWidth, newHeight, {
+            format: THREE.RGBAFormat,
+            type: THREE.UnsignedByteType,
+            encoding: this.renderer.outputEncoding, // Preserve renderer's encoding
+        });
+
+        // Render to offscreen target
+        this.renderer.setRenderTarget(renderTarget);
+        this.renderer.render(this.scene, this.camera);
+
+        // Read pixels from the render target
+        const gl = this.renderer.getContext();
+        const pixels = new Uint8Array(newWidth * newHeight * 4);
+        gl.readPixels(0, 0, newWidth, newHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+        // Create an offscreen canvas
+        const offscreenCanvas = document.createElement('canvas');
+        offscreenCanvas.width = newWidth;
+        offscreenCanvas.height = newHeight;
+        const ctx = offscreenCanvas.getContext('2d');
+
+        // Convert linear colors to sRGB for correct brightness
+        // Helper function to convert a single linear color value to sRGB
+        const linearToSRGB = (c) => {
+            return c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1.0 / 2.4) - 0.055;
+        };
+
+        const imageData = ctx.createImageData(newWidth, newHeight);
+        for (let y = 0; y < newHeight; y++) {
+            const sourceY = newHeight - y - 1; // Flip vertically
+            const sourceOffset = sourceY * newWidth * 4;
+            const destOffset = y * newWidth * 4;
+
+            // Copy and convert each pixel from linear to sRGB
+            for (let x = 0; x < newWidth; x++) {
+                const pixelSourceOffset = sourceOffset + x * 4;
+                const pixelDestOffset = destOffset + x * 4;
+
+                // Convert RGB channels from linear (0-255) to sRGB
+                const r = pixels[pixelSourceOffset] / 255.0;
+                const g = pixels[pixelSourceOffset + 1] / 255.0;
+                const b = pixels[pixelSourceOffset + 2] / 255.0;
+                const a = pixels[pixelSourceOffset + 3];
+
+                imageData.data[pixelDestOffset] = Math.round(linearToSRGB(r) * 255);
+                imageData.data[pixelDestOffset + 1] = Math.round(linearToSRGB(g) * 255);
+                imageData.data[pixelDestOffset + 2] = Math.round(linearToSRGB(b) * 255);
+                imageData.data[pixelDestOffset + 3] = a; // Alpha stays the same
+            }
+        }
+        ctx.putImageData(imageData, 0, 0);
+
+        // Restore original render settings
+        this.renderer.setRenderTarget(originalRenderTarget);
+        this.camera.aspect = originalAspect;
+        this.camera.updateProjectionMatrix();
+        this.renderer.toneMapping = originalToneMapping;
+        this.renderer.toneMappingExposure = originalExposure;
+        this.renderer.outputEncoding = originalOutputEncoding;
+
+        // Restore clear color, alpha, scene background, and ground plane (design-viewer approach)
+        this.renderer.setClearColor(originalClearColor, originalClearAlpha);
+        this.scene.background = originalBackground;
+        if (this.groundPlane) {
+            this.groundPlane.visible = originalGroundPlaneVisible;
+        }
+
+        this.renderer.render(this.scene, this.camera);
+
+        // Convert canvas to data URL and trigger download
+        // Using data URL instead of blob for better Chrome filename support
+        const dataUrl = offscreenCanvas.toDataURL('image/png');
+
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = 'current_view_screenshot.png';
+        link.style.display = 'none';
+
+        // Append to body, click, and clean up
+        document.body.appendChild(link);
+        link.click();
+
+        // Clean up after download
+        setTimeout(() => {
+            document.body.removeChild(link);
+        }, 100);
+
+        // Cleanup
+        renderTarget.dispose();
+    }
+
 
     // Switch to Colors & Stripes mode (hide design, show stripes)
     switchToColorsMode() {
@@ -3393,6 +3625,9 @@ class JerseyViewer {
 // Initialize the viewer when DOM is ready
 let jerseyViewer;
 
+// Expose JerseyViewer class globally for share page to use
+window.JerseyViewer = JerseyViewer;
+
 // Only auto-initialize if not on share page
 if (!window.location.pathname.includes('/jersey-configurator/share/')) {
     if (document.readyState === 'loading') {
@@ -3432,11 +3667,32 @@ function initViewer() {
 
     partSelectors.forEach(selector => {
         if (selector) {
-            selector.addEventListener('change', (event) => {
+            // Store previous value on focus for login guard
+            selector.addEventListener('focusin', () => {
+                selector.dataset.prevValue = selector.value;
+            });
+
+            selector.addEventListener('change', async (event) => {
+                // Check login guard for jersey-part-select-working (upload image dropdown)
+                if (selector.id === 'jersey-part-select-working') {
+                    if (window.requireLoginGuard) {
+                        const allowed = await window.requireLoginGuard(event, selector);
+                        if (!allowed) return;
+                    }
+
+                    // Mark design as dirty if login guard passes
+                    if (window.markDesignDirty) {
+                        window.markDesignDirty();
+                    }
+                }
+
                 const selectedPart = event.target.value;
                 debugLog(`Part changed to: ${selectedPart}`);
                 jerseyViewer.currentPart = selectedPart;
                 jerseyViewer.switchDebugCanvas(selectedPart);
+
+                // Clear all logo selections when switching parts
+                jerseyViewer.clearAllLogoSelections();
 
                 // Animate camera to the selected part's position
                 jerseyViewer.animateCameraToPart(selectedPart);
@@ -3473,6 +3729,12 @@ function initViewer() {
     window.takeScreenshot = async () => {
         return jerseyViewer.takeScreenshot();
     };
+
+    // Expose takeCurrentViewScreenshot method globally for screenshot button
+    window.takeCurrentViewScreenshot = () => {
+        jerseyViewer.takeCurrentViewScreenshot();
+    };
+
 
     // Expose hideCanvasLoader globally for script.js to call when ALL loading is complete
     window.hideCanvasLoader = () => {

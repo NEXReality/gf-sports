@@ -11,6 +11,26 @@ if (typeof window.supabaseClient === 'undefined') {
 // Use var to allow redeclaration if script runs multiple times
 var supabase = window.supabaseClient;
 
+// Helper function to get base path (repository name) for GitHub Pages
+// Returns '/gf-sports' on GitHub Pages or '' for local development
+function getBasePath() {
+    const pathname = window.location.pathname;
+    // Extract repo name from path like /gf-sports/socks-configurator/index.html
+    const pathParts = pathname.split('/').filter(part => part);
+    
+    // If we're on GitHub Pages, the first part is usually the repo name
+    // Check if we're on github.io domain
+    if (window.location.hostname.includes('github.io')) {
+        // On GitHub Pages, first path segment is the repo name
+        if (pathParts.length > 0) {
+            return `/${pathParts[0]}`;
+        }
+    }
+    
+    // For local development or if no repo name found, return empty string
+    return '';
+}
+
 // Function to get the current language
 function getCurrentLanguage() {
   return localStorage.getItem("language") || "en"
@@ -247,8 +267,9 @@ forgotPasswordForm.addEventListener('submit', async (e) => {
   const email = document.getElementById('forgotPasswordEmail').value;
 
   try {
+    const basePath = getBasePath();
     const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'https://globe-fashion.com/reset-password/index.html'
+      redirectTo: window.location.origin + basePath + '/reset-password/'
     });
 
     if (error) throw error;
@@ -333,6 +354,14 @@ function getTranslation(key, lang) {
       en: "pairs",
       fr: "paires",
     },
+    piecesLabel: {
+      en: "pieces",
+      fr: "pièces",
+    },
+    itemsLabel: {
+      en: "items",
+      fr: "articles",
+    },
     siliconGripLabel: {
       en: "Silicon Grip:",
       fr: "Grip en silicone:",
@@ -416,7 +445,7 @@ async function updateUIBasedOnLoginStatus() {
   const isLoggedIn = await checkUserLoggedIn()
   const currentLang = localStorage.getItem("language") || "en"
 
-  // 1. Show/hide .nav-link (always show home button, only show My Designs/Place Order when logged in)
+  // 1. Show/hide .nav-link (always show home button and Configurator, only show My Designs/Place Order when logged in)
   const navLinks = document.querySelectorAll(".nav-link")
   navLinks.forEach((link) => {
     // Always show home button
@@ -424,8 +453,13 @@ async function updateUIBasedOnLoginStatus() {
       link.style.display = "flex"
       return
     }
-    // Only show "My Designs" and "Place Order" when logged in
+    // Always show Configurator link
     const linkText = link.textContent.trim()
+    if (linkText.includes('Configurator') || linkText.includes('Configurateur')) {
+      link.style.display = "flex"
+      return
+    }
+    // Only show "My Designs" and "Place Order" when logged in
     if (linkText.includes('My Designs') || linkText.includes('Mes Designs') ||
       linkText.includes('Place Order') || linkText.includes('Passer Commande')) {
       link.style.display = isLoggedIn ? "flex" : "none"

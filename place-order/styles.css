@@ -419,7 +419,7 @@ td {
 
 /* Silicon grip column - always visible for alignment, but checkbox hidden for jerseys */
 .silicon-grip {
-    text-align: center;
+    text-align: left;
 }
 
 .silicon-grip-placeholder {
