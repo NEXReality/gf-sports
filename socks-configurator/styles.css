@@ -24,6 +24,17 @@ body {
     line-height: 1.5;
 }
 
+/* Language handling (for access-blocked overlay and data-en/data-fr) */
+[data-fr]:not(option) {
+    display: none !important;
+}
+.lang-fr [data-en]:not(option) {
+    display: none !important;
+}
+.lang-fr [data-fr]:not(option) {
+    display: revert !important;
+}
+
 /* Header styles */
 .header {
     position: fixed;
@@ -1276,4 +1287,78 @@ body {
         transform: translateY(0);
         opacity: 1;
     }
+}
+
+/* Access blocked overlay - configurator gate (Layer 1 UX) */
+.access-blocked-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    pointer-events: auto;
+}
+
+.access-blocked-overlay .access-blocked-content {
+    background: white;
+    padding: 1.5rem 2rem;
+    border-radius: var(--radius-lg);
+    max-width: 420px;
+    width: 90%;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    text-align: center;
+}
+
+.access-blocked-overlay .access-blocked-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    color: var(--color-text, #1f2937);
+}
+
+.access-blocked-overlay .access-blocked-message {
+    font-size: 0.9375rem;
+    color: var(--color-text-secondary, #6b7280);
+    margin-bottom: 1.25rem;
+    line-height: 1.5;
+}
+
+.access-blocked-overlay .access-blocked-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.access-blocked-overlay .access-blocked-actions button {
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border, #e5e7eb);
+    background: var(--color-surface, #f9fafb);
+    color: var(--color-text, #1f2937);
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+.access-blocked-overlay .access-blocked-actions button.primary,
+.access-blocked-overlay .access-blocked-actions a.access-blocked-btn.primary {
+    background: var(--color-primary, #1f2937);
+    color: white;
+    border-color: transparent;
+}
+
+.access-blocked-overlay .access-blocked-actions a.access-blocked-btn {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border, #e5e7eb);
+    background: var(--color-surface, #f9fafb);
+    color: var(--color-text, #1f2937);
+    font-size: 0.875rem;
+    text-decoration: none;
 }

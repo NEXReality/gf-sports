@@ -8,14 +8,14 @@
   <meta name="title" content="GF Sports">
   <meta name="keywords" content="3D socks configurator, 3D jersey configurator, custom socks designer, custom jersey designer, 3D custom socks, 3D custom jersey, online socks configurator, online jersey configurator, socks design tool, jersey design tool, personalized socks maker, personalized jersey maker, sportswear configurator, teamwear configurator, 3D apparel configurator, interactive socks designer, interactive jersey designer, custom sportswear generator, socks customization software, jersey customization software">
   <meta name="description" content="Design custom socks and jerseys in real time using an interactive 3D configurator. Create, personalize, visualize, and order sportswear online with ease.">
-  <link rel="canonical" href="http://gf-sports.fr/">
+  <link rel="canonical" href="https://gf-sports.fr/">
   <meta property="og:image" content="https://raw.githubusercontent.com/NEXReality/gf-sports/f21e7793d8760a22db11893ff94582c4a0868479/images/og_image.jpg">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="http://gf-sports.fr/">
+  <meta property="og:url" content="https://gf-sports.fr/">
   <meta property="og:title" content="GF Sports">
   <meta property="og:description" content="Design custom socks and jerseys in real time using an interactive 3D configurator. Create, personalize, visualize, and order sportswear online with ease.">
   <meta name="twitter:title" content="GF Sports">
-  <meta name="twitter:url" content="http://gf-sports.fr/">
+  <meta name="twitter:url" content="https://gf-sports.fr/">
   <meta name="twitter:description" content="Design custom socks and jerseys in real time using an interactive 3D configurator. Create, personalize, visualize, and order sportswear online with ease.">
   <meta name="twitter:image" content="https://raw.githubusercontent.com/NEXReality/gf-sports/f21e7793d8760a22db11893ff94582c4a0868479/images/og_image.jpg">
   <meta name="twitter:card" content="summary">
@@ -158,7 +158,9 @@
                 <span data-fr>Prénom</span>
               </label>
               <input type="text" id="firstName" placeholder="First name"
-                data-en-placeholder="First name" data-fr-placeholder="Prénom" required>
+                data-en-placeholder="First name" data-fr-placeholder="Prénom"
+                pattern="[A-Za-z\s\-']+" title="Letters only (no numbers)"
+                data-en-title="Letters only (no numbers)" data-fr-title="Lettres uniquement (pas de chiffres)" required>
             </div>
             <div class="form-group">
               <label for="lastName">
@@ -166,7 +168,9 @@
                 <span data-fr>Nom</span>
               </label>
               <input type="text" id="lastName" placeholder="Last name" data-en-placeholder="Last name"
-                data-fr-placeholder="Nom" required>
+                data-fr-placeholder="Nom"
+                pattern="[A-Za-z\s\-']+" title="Letters only (no numbers)"
+                data-en-title="Letters only (no numbers)" data-fr-title="Lettres uniquement (pas de chiffres)" required>
             </div>
           </div>
           <div class="form-group">
@@ -186,6 +190,15 @@
             <input type="text" id="clubNameSignup" placeholder="Enter your club name"
               data-en-placeholder="Enter your club name"
               data-fr-placeholder="Entrez le nom de votre club" required>
+          </div>
+          <div class="form-group">
+            <label for="distributorNameSignup">
+              <span data-en>Distributor Name</span>
+              <span data-fr>Nom du distributeur</span>
+            </label>
+            <input type="text" id="distributorNameSignup" placeholder="Enter distributor name"
+              data-en-placeholder="Enter distributor name"
+              data-fr-placeholder="Entrez le nom du distributeur" required>
           </div>
           <div class="form-group">
             <label for="signupEmail">
@@ -281,7 +294,7 @@
   <main class="page">
     <section class="hero" id="configurator-section">
       <div class="cards" id="configurator-cards">
-        <article class="card">
+        <article class="card" data-configurator="jersey">
           <div class="card-image">
             <img src="images/jersey.webp" alt="Custom jersey">
           </div>
@@ -290,12 +303,16 @@
             <h2 class="card-title" data-fr>Configurateur de Maillots</h2>
             <p class="card-text" data-en>Create your team's jerseys with custom colors, logos, names, and numbers for a perfect fit.</p>
             <p class="card-text" data-fr>Créez les maillots de votre équipe avec des couleurs, logos, noms et numéros personnalisés pour un ajustement parfait.</p>
-            <a href="jersey/collar/index.html" class="card-button" data-en>Customize Jerseys</a>
-            <a href="jersey/collar/index.html" class="card-button" data-fr>Personnaliser les maillots</a>
+            <a href="jersey/collar/index.html" class="card-button card-button-default" data-en>Customize Jerseys</a>
+            <a href="jersey/collar/index.html" class="card-button card-button-default" data-fr>Personnaliser les maillots</a>
+            <span class="card-button card-button-disabled">
+              <span data-en>Access Not Granted</span>
+              <span data-fr>Accès Non Accordé</span>
+            </span>
           </div>
         </article>
 
-        <article class="card">
+        <article class="card" data-configurator="socks">
           <div class="card-image">
             <img src="images/socks.webp" alt="Custom socks">
           </div>
@@ -304,8 +321,12 @@
             <h2 class="card-title" data-fr>Configurateur de Chaussettes</h2>
             <p class="card-text" data-en>Design your custom athletic socks with vibrant colors, patterns, and personalized text.</p>
             <p class="card-text" data-fr>Créez des chaussettes personnalisées avec des couleurs, motifs et textes uniques.</p>
-            <a href="socks-configurator/index.html" class="card-button" data-en>Customize Socks</a>
-            <a href="socks-configurator/index.html" class="card-button" data-fr>Personnaliser les chaussettes</a>
+            <a href="socks-configurator/index.html" class="card-button card-button-default" data-en>Customize Socks</a>
+            <a href="socks-configurator/index.html" class="card-button card-button-default" data-fr>Personnaliser les chaussettes</a>
+            <span class="card-button card-button-disabled">
+              <span data-en>Access Not Granted</span>
+              <span data-fr>Accès Non Accordé</span>
+            </span>
           </div>
         </article>
       </div>
@@ -315,11 +336,37 @@
           Discover our personalization solution with two innovative configurators to choose from: one dedicated to creating custom socks, the other designed for bespoke match jerseys. Offer your customers an immersive experience where they can select colors, patterns, logos, and technical options to create a unique product, perfectly suited to their sporting identity. Intuitive, fast, and compatible with all devices, our configurators enhance your brand, boost engagement, and simplify the ordering process. Bring your designs to life in just a few clicks and increase your sales with a modern, attractive, and fully customizable tool.
         </p>
         <p data-fr>
-          Découvrez notre solution de personnalisation avec deux configurateurs innovants : l'un dédié à la création de chaussettes personnalisées, l'autre conçu pour des maillots sur mesure. Offrez à vos clients une expérience immersive où ils peuvent sélectionner couleurs, motifs, logos et options techniques pour créer un produit unique, parfaitement adapté à leur identité sportive. Intuitifs, rapides et compatibles avec tous les appareils, nos configurateurs valorisent votre marque, stimulent l'engagement et simplifient le processus de commande. Donnez vie à vos créations en quelques clics et augmentez vos ventes grâce à un outil moderne, attrayant et entièrement personnalisable.
+          Découvrez notre solution de personnalisation avec deux configurateurs innovants au choix : l’un dédié à la création de maillots de match sur mesure, l’autre conçu pour les chaussettes sur mesure. Offrez à vos clients une expérience immersive où ils peuvent sélectionner couleurs, motifs, logos et options techniques pour créer un produit unique, parfaitement adapté à leur identité sportive. Intuitifs, rapides et compatibles tous supports, nos configurateurs valorisent votre marque, stimulent l’engagement et simplifient la prise de commande. Donnez vie à vos designs en quelques clics et boostez vos ventes grâce à un outil moderne, attractif et entièrement personnalisable.
         </p>
       </div>
     </section>
   </main>
+
+  <!-- Access Denied Modal -->
+  <div class="modal-overlay" id="access-denied-modal" style="display: none;">
+    <div class="modal">
+      <div class="modal-content">
+        <h2 class="modal-title">
+          <span data-en>Access Not Granted</span>
+          <span data-fr>Accès Non Accordé</span>
+        </h2>
+        <p class="access-denied-text" id="access-denied-message">
+          <span data-en>You do not have access to this configurator. Please contact the administrator if you believe this is an error.</span>
+          <span data-fr>Vous n'avez pas accès à ce configurateur. Veuillez contacter l'administrateur si vous pensez qu'il s'agit d'une erreur.</span>
+        </p>
+        <div class="access-denied-actions">
+          <a href="mailto:admin@globe-fashion.com" class="access-denied-contact-btn">
+            <span data-en>Contact Support</span>
+            <span data-fr>Contacter le Support</span>
+          </a>
+          <button type="button" class="access-denied-close-btn" id="access-denied-close-btn">
+            <span data-en>Close</span>
+            <span data-fr>Fermer</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <script src="jersey-configurator/auth.js"></script>

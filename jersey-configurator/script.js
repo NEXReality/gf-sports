@@ -8,9 +8,144 @@ function debugLog(...args) {
 }
 
 // Global flag to enable/disable design-colors.json overrides
+// Set to true to use manual overrides from design-colors - override.json
 // Set to false to always use auto-detection instead of manual overrides
-window.USE_DESIGN_OVERRIDES = false;
+window.USE_DESIGN_OVERRIDES = true;
 
+// --- Configurator access gate (Layer 1 UX + tamper detection) ---
+var accessBlockedOverlayObserver = null;
+var accessBlockedReverifyInterval = null;
+
+// Exact copy from index.html access-denied modal (EN/FR) so message stays in sync and language toggle works
+var ACCESS_BLOCKED_TEXTS = {
+  no_configurator: {
+    titleEn: 'Access Not Granted',
+    titleFr: 'Accès Non Accordé',
+    messageEn: 'You do not have access to this configurator. Please contact the administrator if you believe this is an error.',
+    messageFr: 'Vous n\'avez pas accès à ce configurateur. Veuillez contacter l\'administrateur si vous pensez qu\'il s\'agit d\'une erreur.'
+  },
+  pending: { titleEn: 'Account Pending Approval', titleFr: 'Compte en attente d\'approbation', messageEn: 'Your account is being reviewed. You\'ll receive an email when approved.', messageFr: 'Votre compte est en cours de vérification. Vous recevrez un e-mail une fois approuvé.' },
+  suspended: { titleEn: 'Account Suspended', titleFr: 'Compte suspendu', messageEn: 'Your account has been suspended. Contact support if this is an error.', messageFr: 'Votre compte a été suspendu. Contactez le support si c\'est une erreur.' },
+  login_required: { titleEn: 'Login Required', titleFr: 'Connexion requise', messageEn: 'Please log in to access the configurator.', messageFr: 'Veuillez vous connecter pour accéder au configurateur.' }
+};
+
+function getBlockedMessageHTML(reason) {
+  var t = ACCESS_BLOCKED_TEXTS[reason] || ACCESS_BLOCKED_TEXTS.no_configurator;
+  return '<div class="access-blocked-content">' +
+    '<h2 class="access-blocked-title">' +
+    '<span data-en>' + t.titleEn + '</span><span data-fr>' + t.titleFr + '</span></h2>' +
+    '<p class="access-blocked-message">' +
+    '<span data-en>' + t.messageEn + '</span><span data-fr>' + t.messageFr + '</span></p>' +
+    '<div class="access-blocked-actions">' +
+    '<a href="../index.html" class="access-blocked-btn primary"><span data-en>Go to Home</span><span data-fr>Accueil</span></a>' +
+    '<a href="mailto:admin@globe-fashion.com" class="access-blocked-btn"><span data-en>Contact Support</span><span data-fr>Contacter le Support</span></a>' +
+    '</div></div>';
+}
+
+function showAccessBlockedOverlay(reason) {
+  if (document.getElementById('access-blocked-overlay')) return;
+  var overlay = document.createElement('div');
+  overlay.id = 'access-blocked-overlay';
+  overlay.className = 'access-blocked-overlay';
+  overlay.innerHTML = getBlockedMessageHTML(reason);
+  document.body.appendChild(overlay);
+
+  document.querySelectorAll('input, button, select, textarea, canvas').forEach(function (el) {
+    el.disabled = true;
+    el.style.pointerEvents = 'none';
+  });
+
+  if (accessBlockedOverlayObserver) {
+    try { accessBlockedOverlayObserver.disconnect(); } catch (e) {}
+  }
+  accessBlockedOverlayObserver = new MutationObserver(function () {
+    if (!document.getElementById('access-blocked-overlay')) {
+      location.reload();
+    }
+  });
+  accessBlockedOverlayObserver.observe(document.body, { childList: true, subtree: true });
+
+  if (!accessBlockedReverifyInterval) {
+    var RECHECK_MS = 30000;
+    accessBlockedReverifyInterval = setInterval(async function () {
+      var overlay = document.getElementById('access-blocked-overlay');
+      if (overlay) {
+        var hasAccess = typeof window.canAccessConfigurator === 'function' && await window.canAccessConfigurator('jersey');
+        if (hasAccess) location.reload();
+        return;
+      }
+      if (typeof window.invalidateAuthCache === 'function') window.invalidateAuthCache();
+      var hasAccess = typeof window.canAccessConfigurator === 'function' && await window.canAccessConfigurator('jersey');
+      if (!hasAccess) {
+        var reason = await getAccessBlockReason('jersey');
+        if (reason) {
+          if (reason === 'login_required' && typeof window.showLoginModal === 'function') window.showLoginModal();
+          else showAccessBlockedOverlay(reason);
+        }
+      }
+    }, RECHECK_MS);
+  }
+}
+
+function getAccessBlockReason(configuratorType) {
+  return new Promise(function (resolve) {
+    if (typeof window.checkUserLoggedIn !== 'function') { resolve('login_required'); return; }
+    window.checkUserLoggedIn().then(function (isLoggedIn) {
+      if (!isLoggedIn) { resolve('login_required'); return; }
+      if (typeof window.getAccountStatus !== 'function') { resolve('pending'); return; }
+      window.getAccountStatus().then(function (status) {
+        if (status !== 'approved') { resolve(status || 'pending'); return; }
+        if (typeof window.getConfiguratorAccess !== 'function') { resolve('no_configurator_access'); return; }
+        window.getConfiguratorAccess().then(function (access) {
+          var allowed = configuratorType === 'jersey' ? access.jersey_access : access.socks_access;
+          resolve(allowed ? null : 'no_configurator_access');
+        });
+      });
+    });
+  });
+}
+
+async function checkConfiguratorAccess() {
+  var isLoggedIn = typeof window.checkUserLoggedIn === 'function' && await window.checkUserLoggedIn();
+  if (!isLoggedIn) {
+    if (typeof window.showLoginModal === 'function') window.showLoginModal();
+    return false;
+  }
+  var status = typeof window.getAccountStatus === 'function' ? await window.getAccountStatus() : 'pending';
+  if (status !== 'approved') {
+    showAccessBlockedOverlay(status);
+    return false;
+  }
+  var access = typeof window.getConfiguratorAccess === 'function' ? await window.getConfiguratorAccess() : { jersey_access: false };
+  if (!access.jersey_access) {
+    showAccessBlockedOverlay('no_configurator_access');
+    return false;
+  }
+  return true;
+}
+
+document.addEventListener('DOMContentLoaded', function runConfiguratorAccessGate() {
+  checkConfiguratorAccess();
+  if (accessBlockedReverifyInterval) return;
+  var RECHECK_MS = 30000;
+  accessBlockedReverifyInterval = setInterval(async function () {
+    var overlay = document.getElementById('access-blocked-overlay');
+    if (overlay) {
+      var hasAccess = typeof window.canAccessConfigurator === 'function' && await window.canAccessConfigurator('jersey');
+      if (hasAccess) location.reload();
+      return;
+    }
+    if (typeof window.invalidateAuthCache === 'function') window.invalidateAuthCache();
+    var hasAccess = typeof window.canAccessConfigurator === 'function' && await window.canAccessConfigurator('jersey');
+    if (!hasAccess) {
+      var reason = await getAccessBlockReason('jersey');
+      if (reason) {
+        if (reason === 'login_required' && typeof window.showLoginModal === 'function') window.showLoginModal();
+        else showAccessBlockedOverlay(reason);
+      }
+    }
+  }, RECHECK_MS);
+});
 
 // Save button dropdown functionality
 const dropdownArrow = document.getElementById('dropdown-arrow');
@@ -1628,6 +1763,11 @@ async function getDesignColorOverride(svgPath) {
   const family = match[1];
   const design = match[2];
 
+  // Extract variant key from SVG filename (e.g., "round_reglan_rush.svg" → "round_reglan")
+  // Path format: {collar}_{shoulder}_{design}.svg
+  const variantMatch = pathToCheck.match(/([^/]+)_([^/]+)_[^/]+\.svg$/);
+  const variantKey = variantMatch ? `${variantMatch[1]}_${variantMatch[2]}` : null;
+
   // Load override file (cached)
   if (!window._designColorsCache) {
     // Try multiple paths to support index.html, admin-design/index.html, and share/index.html
@@ -1657,12 +1797,34 @@ async function getDesignColorOverride(svgPath) {
     }
   }
 
-  // Hierarchical lookup: family > design
-  const override = window._designColorsCache[family]?.[design];
-  if (override) {
-    debugLog(`✅ Found color override for ${family}/${design}:`, override);
+  // 4-tier lookup priority for hybrid structure support
+  const designData = window._designColorsCache[family]?.[design];
+  
+  if (designData) {
+    // Priority 1: Check for variant-specific override (family.design.variants.{collar}_{shoulder})
+    if (variantKey && designData.variants?.[variantKey]) {
+      debugLog(`✅ Found variant-specific override for ${family}/${design}/${variantKey}:`, designData.variants[variantKey]);
+      return designData.variants[variantKey];
+    }
+    
+    // Priority 2: Check for design default (family.design.default)
+    if (designData.default) {
+      debugLog(`✅ Found default override for ${family}/${design}:`, designData.default);
+      return designData.default;
+    }
+    
+    // Priority 3: Legacy format - design is directly an array (family.design = [...])
+    if (Array.isArray(designData)) {
+      debugLog(`✅ Found legacy override for ${family}/${design}:`, designData);
+      return designData;
+    }
+    
+    // Design entry exists but no matching override found (variants object exists but not for this variant)
+    debugLog(`⚠️ Design ${family}/${design} has override config but no match for variant ${variantKey}, falling back to auto-detection`);
   }
-  return override || null;
+  
+  // Priority 4: No override found - return null to trigger auto-detection
+  return null;
 }
 
 /**
@@ -3052,6 +3214,12 @@ async function checkDesignNameExists(designName) {
 
 // Upload thumbnail and save design
 async function uploadThumbnailAndSaveDesign(designName) {
+  // Layer 2: Re-verify access before save
+  var hasAccess = typeof window.canAccessConfigurator === 'function' && await window.canAccessConfigurator('jersey');
+  if (!hasAccess) {
+    if (window.translatedAlert) window.translatedAlert('no_configurator_access_message');
+    return { success: false, message: (window.getTranslation && window.getTranslation('no_configurator_access_message', (window.getCurrentLanguage && window.getCurrentLanguage()) || 'en')) || 'You do not have permission to save designs.' };
+  }
   try {
     if (window.showLoading) window.showLoading();
 
@@ -3375,6 +3543,12 @@ async function updateExistingDesign(designId, designName) {
 // Main save design function
 async function saveDesign() {
   if (isSaving) return;
+  // Layer 2: Re-verify access at save time (UX - friendly error)
+  var hasAccess = typeof window.canAccessConfigurator === 'function' && await window.canAccessConfigurator('jersey');
+  if (!hasAccess) {
+    if (window.translatedAlert) window.translatedAlert('no_configurator_access_message');
+    return;
+  }
   const mainSaveButton = document.getElementById('main-save-button');
   const saveTextSpan = mainSaveButton?.querySelector('.save-text');
 
