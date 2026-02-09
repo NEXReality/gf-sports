@@ -166,6 +166,13 @@ class JerseyViewer {
         this.isAnimatingCamera = false;
         this.cameraAnimationStartTime = 0;
 
+        // Pre-allocated reusable objects for camera animation (Safari performance optimization)
+        this._animCenterVector = new THREE.Vector3(0, 0, 0); // Jersey center point
+        this._animStartSpherical = new THREE.Spherical();
+        this._animTargetSpherical = new THREE.Spherical();
+        this._animCurrentSpherical = new THREE.Spherical();
+        this._animTempVector = new THREE.Vector3(); // Temporary vector for calculations
+
         // Stripe configuration state
         // Per-part stripe orientation (horizontal or vertical)
         this.stripeOrientationByPart = {
@@ -3010,8 +3017,10 @@ class JerseyViewer {
             }
             this.isAnimatingCamera = false;
         } else {
-            // Ease-out cubic easing for smooth animation
-            const easeProgress = 1 - Math.pow(1 - progress, 3);
+            // Ease-in-out quadratic easing for gentle, smooth start and end
+            const easeProgress = progress < 0.5
+                ? 2 * progress * progress
+                : 1 - Math.pow(-2 * progress + 2, 2) / 2;
 
             // Determine target based on animation type
             const targetPos = this.isAnimatingToPart && this.targetCameraPosition
@@ -3022,25 +3031,25 @@ class JerseyViewer {
                 : this.initialControlsTarget;
 
             // Use spherical interpolation for orbital movement (for all animations)
-            const center = new THREE.Vector3(0, 0, 0); // Jersey center
+            // OPTIMIZATION: Reuse pre-allocated objects to avoid per-frame allocations (Safari performance)
 
-            // Get start spherical coordinates
-            const startSpherical = new THREE.Spherical();
-            startSpherical.setFromVector3(this.cameraStartPosition.clone().sub(center));
+            // Get start spherical coordinates (reuse _animTempVector and _animStartSpherical)
+            this._animTempVector.copy(this.cameraStartPosition).sub(this._animCenterVector);
+            this._animStartSpherical.setFromVector3(this._animTempVector);
 
-            // Get target spherical coordinates
-            const targetSpherical = new THREE.Spherical();
-            targetSpherical.setFromVector3(targetPos.clone().sub(center));
+            // Get target spherical coordinates (reuse _animTempVector and _animTargetSpherical)
+            this._animTempVector.copy(targetPos).sub(this._animCenterVector);
+            this._animTargetSpherical.setFromVector3(this._animTempVector);
 
-            // Interpolate spherical coordinates
-            const currentSpherical = new THREE.Spherical(
-                THREE.MathUtils.lerp(startSpherical.radius, targetSpherical.radius, easeProgress),
-                THREE.MathUtils.lerp(startSpherical.phi, targetSpherical.phi, easeProgress),
-                THREE.MathUtils.lerp(startSpherical.theta, targetSpherical.theta, easeProgress)
+            // Interpolate spherical coordinates (reuse _animCurrentSpherical)
+            this._animCurrentSpherical.set(
+                THREE.MathUtils.lerp(this._animStartSpherical.radius, this._animTargetSpherical.radius, easeProgress),
+                THREE.MathUtils.lerp(this._animStartSpherical.phi, this._animTargetSpherical.phi, easeProgress),
+                THREE.MathUtils.lerp(this._animStartSpherical.theta, this._animTargetSpherical.theta, easeProgress)
             );
 
             // Convert back to Cartesian coordinates
-            this.camera.position.setFromSpherical(currentSpherical).add(center);
+            this.camera.position.setFromSpherical(this._animCurrentSpherical).add(this._animCenterVector);
 
             // Interpolate controls target (always linear)
             this.controls.target.lerpVectors(
