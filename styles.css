@@ -232,6 +232,7 @@ body.share-page .viewer-container {
 
 /* Main content */
 .page {
+  position: relative;
   padding-top: calc(var(--header-height) + env(safe-area-inset-top));
   display: flex;
   justify-content: center;
@@ -414,6 +415,89 @@ body.share-page .viewer-container {
   background: #9ca3af;
 }
 
+/* Gradient accent card wrapper (outside hero, right side) - below fixed header, aligned to header max-width: 1440px */
+.gradient-card-wrapper {
+  position: absolute;
+  right: max(clamp(24px, 4vw, 40px), calc((100vw - 1440px) / 2 + 40px));
+  top: calc(var(--header-height) + env(safe-area-inset-top) + clamp(16px, 2vw, 24px));
+  z-index: 1;
+}
+
+.gradient-card-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
+/* Gradient accent card (right side) - From Uiverse.io by shakil_6466 */
+.gradient-card {
+  width: 140px;
+  height: 198px;
+  background: #07182e;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 20px;
+  padding: 4px; /* leaves gradient border visible; image sits inside */
+}
+
+.gradient-card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 2;
+  position: relative;
+  border-radius: 16px; /* match inner radius so image doesn't overlap gradient ring */
+}
+
+.gradient-card::before {
+  content: "";
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(
+    from 0deg at 50% 50%,
+    #00c3ff 0%,
+    #7b2ff7 25%,
+    #00f2c3 55%,
+    #ffe600 85%,
+    #00c3ff 100%
+  );
+  animation: gradient-card-rotate 5s linear infinite;
+  filter: blur(10px) brightness(1.2);
+  z-index: 0;
+}
+
+.gradient-card::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  background: #07182e;
+  border-radius: 16px;
+  z-index: 1;
+  box-shadow: inset 0 0 20px rgba(0, 183, 255, 0.1);
+}
+
+.gradient-card .gradient-overlay {
+  position: absolute;
+  inset: 4px;
+  border-radius: 16px;
+  background: radial-gradient(circle at center, transparent 40%, rgba(7, 24, 46, 0.6) 80%);
+  z-index: 1;
+  pointer-events: none;
+}
+
+@keyframes gradient-card-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .description {
   max-width: 1000px;
   text-align: center;
@@ -464,6 +548,10 @@ body.share-page .viewer-container {
     grid-template-columns: 1fr;
     gap: clamp(16px, 4vw, 24px);
     max-width: 100%;
+  }
+
+  .gradient-card-wrapper {
+    display: none;
   }
 
   .card-body {
