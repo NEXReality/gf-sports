@@ -50,6 +50,14 @@ function setLanguage(lang) {
   updateOptionTexts(lang);
   updatePlaceholders(lang);
 
+  // Update catalogue card tooltip (native title) for EN/FR
+  const catalogueLink = document.querySelector('.gradient-card-link');
+  if (catalogueLink) {
+    const titleKey = lang === 'fr' ? 'data-fr-title' : 'data-en-title';
+    const titleText = catalogueLink.getAttribute(titleKey);
+    if (titleText) catalogueLink.setAttribute('title', titleText);
+  }
+
   // Save to localStorage
   localStorage.setItem('language', lang);
 
